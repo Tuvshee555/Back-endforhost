@@ -1,0 +1,93 @@
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+model User {
+    id               String      @id @default(uuid())
+    email            String      @unique
+    password         String?
+    phonenumber      String?
+    address          String?
+    role             Role        @default(USER)
+    orderedFoods     OrderItem[]
+    isVerified       Boolean     @default(false)
+    resetToken       String?
+    resetTokenExpiry DateTime?
+
+    createdAt DateTime    @default(now())
+    updatedAt DateTime    @updatedAt
+    FoodOrder FoodOrder[]
+}
+
+model Payment {
+    id        String        @id @default(uuid())
+    invoiceId String
+    orderId   String
+    amount    Float
+    status    PaymentStatus @default(PENDING)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model Food {
+    id          String      @id @default(uuid())
+    foodName    String
+    price       Float
+    image       String
+    address     String?
+    ingredients String
+    categoryId  String?
+    category    Category?   @relation(fields: [categoryId], references: [id])
+    OrderItem   OrderItem[]
+}
+
+model Category {
+    id           String @id @default(uuid())
+    categoryName String
+    foods        Food[]
+}
+
+model FoodOrder {
+    id             String      @id @default(uuid())
+    userId         String
+    user           User        @relation(fields: [userId], references: [id])
+    totalPrice     Float
+    status         OrderStatus @default(PENDING)
+    location       String
+    foodOrderItems OrderItem[]
+    createdAt      DateTime    @default(now())
+    updatedAt      DateTime    @updatedAt
+}
+
+model OrderItem {
+    id       String    @id @default(uuid())
+    foodId   String
+    food     Food      @relation(fields: [foodId], references: [id])
+    quantity Int
+    orderId  String
+    order    FoodOrder @relation(fields: [orderId], references: [id])
+    User     User?     @relation(fields: [userId], references: [id])
+    userId   String?
+}
+
+enum Role {
+    USER
+    ADMIN
+}
+
+enum PaymentStatus {
+    PENDING
+    PAID
+}
+
+enum OrderStatus {
+    PENDING
+    CANCELLED
+    DELIVERED
+}
