@@ -4,11 +4,11 @@ import { deleteUser } from "../controller/users/delete-user.js";
 import { updateUser } from "../controller/users/update-user.js";
 import { createUser } from "../controller/users/create-user.js";
 import { loginUser } from "../controller/users/login-user.js";
-import { validateUserId } from "../middleware/users/validate-user-id.js";
 import { forgotPassword } from "../controller/users/forgot-password.js";
 import { resetPassword } from "../controller/users/reset-password.js";
 import { googleAuth } from "../controller/users/google-auth.js";
 import { facebookAuth } from "../controller/users/facebook-auth.js";
+import { validateUserId } from "../users/validate-user-id.js";
 
 
 

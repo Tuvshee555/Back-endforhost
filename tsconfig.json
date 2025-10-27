@@ -27,7 +27,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "src/controller/orders/getAllOrder.js"
+    "controller/orders/getAllOrder.js"
   ],
   "exclude": ["node_modules"]
 }

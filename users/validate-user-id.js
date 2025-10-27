@@ -1,4 +1,4 @@
-import { prisma } from "../../prismaClient.js";
+import { prisma } from "../prismaClient.js";
 
 export const validateUserId = async (req, res, next) => {
   const { id } = req.params;
