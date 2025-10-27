@@ -7,7 +7,7 @@ import { foodRouter } from "./routers/food.router.js";
 import { categoryRouter } from "./routers/category.router.js";
 import { items } from "./routers/items.router.js";
 import { qpayRouter } from "./routers/qpay.router.js";
-import { orderRouter } from "./routers/Order.router.js";
+import { orderRouter } from "./routers/order.router.js";
 
 dotenv.config();
 
