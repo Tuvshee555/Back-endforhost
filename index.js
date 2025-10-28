@@ -12,13 +12,22 @@ import { orderRouter } from "./routers/order.router.js";
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 4000;
+const PORT = process.env.PORT || 4000;
 
 // CORS: allow frontend domain
-app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:3000/home-page", "http://localhost:3001/home-page", "https://your-frontend.vercel.app"],
-  methods: ["GET","POST","PUT","DELETE"]
-}));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "https://food-delivery-customer.vercel.app",
+      "https://food-delivery-admin-peach.vercel.app",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
+
 
 app.use(express.json());
 
@@ -34,4 +43,6 @@ app.use("/qpay", qpayRouter);
 app.get("/", (req, res) => res.send("🚀 Backend Running"));
 
 // Start server
-app.listen(port, () => console.log(`🚀 Server running at http://localhost:${port}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
