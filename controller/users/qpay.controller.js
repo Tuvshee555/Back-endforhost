@@ -3,8 +3,13 @@ import { prisma } from "../../prismaClient.js";
 
 const QPAY_BASE_URL = process.env.QPAY_BASE_URL;
 
-// ✅ Step 1: Get Access Token
+// Token caching
+let cachedToken = null;
+let tokenExpiry = null;
+
 async function getAccessToken() {
+  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+
   const res = await axios.post(
     `${QPAY_BASE_URL}/auth/token`,
     {
@@ -13,13 +18,19 @@ async function getAccessToken() {
     },
     { headers: { "Content-Type": "application/json" } }
   );
-  return res.data.access_token;
+
+  cachedToken = res.data.access_token;
+  tokenExpiry = Date.now() + (res.data.expires_in - 30) * 1000; // 30 sec buffer
+  return cachedToken;
 }
 
-// ✅ Step 2: Create Invoice
+// Create invoice
 export const createInvoice = async (req, res) => {
   try {
     const { orderId, amount } = req.body;
+    if (!orderId || !amount || amount <= 0)
+      return res.status(400).json({ error: "Invalid orderId or amount" });
+
     const token = await getAccessToken();
 
     const invoiceRes = await axios.post(
@@ -35,12 +46,16 @@ export const createInvoice = async (req, res) => {
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    // Save payment in Prisma
+    if (!invoiceRes.data || !invoiceRes.data.invoice_id) {
+      return res.status(500).json({ error: "Invoice creation failed" });
+    }
+
+    // Save payment
     const payment = await prisma.payment.create({
       data: {
         invoiceId: invoiceRes.data.invoice_id,
         orderId,
-        amount,
+        amount: Number(amount),
         status: "PENDING",
       },
     });
@@ -53,14 +68,17 @@ export const createInvoice = async (req, res) => {
     });
   } catch (err) {
     console.error("Create invoice error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to create invoice" });
+    res.status(500).json({ error: err.response?.data || err.message });
   }
 };
 
-// ✅ Step 3: Check Payment
+
+// Check payment
 export const checkPayment = async (req, res) => {
   try {
     const { invoiceId } = req.body;
+    if (!invoiceId) return res.status(400).json({ error: "InvoiceId required" });
+
     const token = await getAccessToken();
 
     const statusRes = await axios.post(
@@ -71,7 +89,7 @@ export const checkPayment = async (req, res) => {
 
     const paid = statusRes.data.paid_amount > 0;
     if (paid) {
-      await prisma.payment.updateMany({
+      await prisma.payment.update({
         where: { invoiceId },
         data: { status: "PAID" },
       });
@@ -84,13 +102,18 @@ export const checkPayment = async (req, res) => {
   }
 };
 
-// ✅ Step 4: Webhook for auto update
+// Webhook
 export const webhook = async (req, res) => {
   console.log("💰 QPay webhook received:", req.body);
   const { object_id, payment_status } = req.body;
 
+  if (!object_id) return res.status(400).json({ error: "InvoiceId missing" });
+
+  const payment = await prisma.payment.findUnique({ where: { invoiceId: object_id } });
+  if (!payment) return res.status(400).json({ error: "Invalid invoice" });
+
   if (payment_status === "PAID") {
-    await prisma.payment.updateMany({
+    await prisma.payment.update({
       where: { invoiceId: object_id },
       data: { status: "PAID" },
     });

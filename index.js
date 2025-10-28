@@ -14,8 +14,12 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 4000;
 
-// Middleware
-app.use(cors());
+// CORS: allow frontend domain
+app.use(cors({
+  origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:3000/home-page", "http://localhost:3001/home-page", "https://your-frontend.vercel.app"],
+  methods: ["GET","POST","PUT","DELETE"]
+}));
+
 app.use(express.json());
 
 // Routers
@@ -24,12 +28,10 @@ app.use("/order", orderRouter);
 app.use("/user", userRouter);
 app.use("/category", categoryRouter);
 app.use("/items", items);
-app.use("/qpay", qpayRouter); // ✅ QPay router
+app.use("/qpay", qpayRouter);
 
 // Health check
-app.get("/", (req, res) => res.send("🚀 QPay Backend Running"));
+app.get("/", (req, res) => res.send("🚀 Backend Running"));
 
 // Start server
 app.listen(port, () => console.log(`🚀 Server running at http://localhost:${port}`));
-console.log("DATABASE_URL:", process.env.DATABASE_URL);
-
