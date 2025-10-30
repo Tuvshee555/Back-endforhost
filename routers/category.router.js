@@ -6,7 +6,7 @@ import { updateCategories } from "../controller/categories/update-categories.js"
 
 export const categoryRouter = Router()
 
-categoryRouter.delete("/", deleteCategories)
+categoryRouter.delete("/",  deleteCategories)
 categoryRouter.post("/", createCategories)
 categoryRouter.get("/",  getCategories)
 categoryRouter.put("/", updateCategories)

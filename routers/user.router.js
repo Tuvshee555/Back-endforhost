@@ -8,7 +8,7 @@ import { forgotPassword } from "../controller/users/forgot-password.js";
 import { resetPassword } from "../controller/users/reset-password.js";
 import { googleAuth } from "../controller/users/google-auth.js";
 import { facebookAuth } from "../controller/users/facebook-auth.js";
-import { validateUserId } from "../users/validate-user-id.js";
+import { validateUserId } from "../middleware/validate-user-id.js";
 
 
 
@@ -18,8 +18,8 @@ export const userRouter = express.Router();
 userRouter.get("/", getUsers);
 userRouter.post("/", createUser);
 userRouter.post("/login", loginUser);
-userRouter.put("/:id", validateUserId, updateUser);
-userRouter.delete("/:id", validateUserId, deleteUser);
+userRouter.put("/:id", validateUserId , updateUser);
+userRouter.delete("/:id", validateUserId , deleteUser);
 
 // Password recovery
 userRouter.post("/forgot-password", forgotPassword);

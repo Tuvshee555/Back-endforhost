@@ -1,30 +1,43 @@
 import { prisma } from "../../prismaClient.js";
 
+// CREATE CATEGORY
 export const createCategories = async (req, res) => {
   const { categoryName } = req.body;
-
-  if (!categoryName || !categoryName.trim()) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Category name is empty!" });
-  }
+  if (!categoryName?.trim())
+    return res.status(400).json({ success: false, message: "Empty name" });
 
   try {
-    // Create new category
-    await prisma.category.create({
-      data: {
-        categoryName: categoryName.trim(),
-      },
-    });
+    await prisma.category.create({ data: { categoryName: categoryName.trim() } });
 
-    // Fetch all categories
-    const allCategories = await prisma.category.findMany();
+    const categories = await prisma.category.findMany({ include: { foods: true } });
 
-    res.status(200).json(allCategories);
+    const mappedCategories = categories.map(c => ({
+      _id: c.id,
+      categoryName: c.categoryName,
+      foodCount: c.foods.length,
+    }));
+
+    res.status(200).json(mappedCategories);
   } catch (error) {
-    console.error("Error creating category:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Error creating category", error: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: "Error creating category" });
+  }
+};
+
+// GET CATEGORY
+export const getCategories = async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({ include: { foods: true } });
+
+    const mappedCategories = categories.map(c => ({
+      _id: c.id,
+      categoryName: c.categoryName,
+      foodCount: c.foods.length,
+    }));
+
+    res.status(200).json(mappedCategories);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Error fetching categories" });
   }
 };

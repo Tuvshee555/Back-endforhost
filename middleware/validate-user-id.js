@@ -7,21 +7,23 @@ export const validateUserId = async (req, res, next) => {
     if (!id) {
       return res
         .status(400)
-        .json({ success: false, message: "ID not provided, invalid input" });
+        .json({ success: false, message: "User ID not provided." });
     }
 
-    const user = await prisma.user.findUnique({ where: { id } });
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
 
     if (!user) {
       return res
         .status(404)
-        .json({ success: false, message: "User not found" });
+        .json({ success: false, message: "User not found." });
     }
 
     next();
   } catch (error) {
-    return res
+    res
       .status(500)
-      .json({ success: false, message: `Error: ${error.message}` });
+      .json({ success: false, message: `Server error: ${error.message}` });
   }
 };
