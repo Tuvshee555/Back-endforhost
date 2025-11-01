@@ -1,14 +1,18 @@
 import { prisma } from "../../prismaClient.js";
 
 export const createFoodOrder = async (req, res) => {
-  const { totalPrice, userId, items } = req.body; // items = [{ foodId, quantity }, ...]
+  const { totalPrice, userId, items, location } = req.body;
+
+  if (!location) {
+    return res.status(400).json({ success: false, message: "Location is required" });
+  }
 
   try {
-    // Create FoodOrder along with related OrderItems in a transaction
     const newOrder = await prisma.foodOrder.create({
       data: {
         userId,
         totalPrice,
+        location, // must match the column name in your Prisma schema
         foodOrderItems: {
           create: items.map(item => ({
             foodId: item.foodId,
@@ -18,11 +22,7 @@ export const createFoodOrder = async (req, res) => {
       },
       include: {
         user: true,
-        foodOrderItems: {
-          include: {
-            food: true,
-          },
-        },
+        foodOrderItems: { include: { food: true } },
       },
     });
 

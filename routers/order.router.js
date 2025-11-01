@@ -4,12 +4,14 @@ import { deleteFoodOrder } from "../controller/orders/delete-orders.js";
 import { getFoodOrder } from "../controller/orders/get-orders.js";
 import { updatedFoodOrder } from "../controller/orders/update-orders.js";
 import { getAllOrder } from "../controller/orders/all-order.js";
-import { validateFoodOrder } from "../middleware/validate-orders.js";
+// import { validateFoodOrder } from "../middleware/validate-orders.js";
 
 export const orderRouter = Router();
 orderRouter.post("/", createFoodOrder);
-orderRouter.delete("/", validateFoodOrder, deleteFoodOrder);
-orderRouter.get("/:_id", validateFoodOrder, getFoodOrder);
+orderRouter.delete("/",  deleteFoodOrder);
+// orderRouter.get("/:_id",  getFoodOrder);
+orderRouter.get("/user/:userId", getFoodOrder);
+
 orderRouter.patch("/:_id", updatedFoodOrder);
 
 orderRouter.get("/", getAllOrder);

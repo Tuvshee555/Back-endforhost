@@ -60,7 +60,7 @@ model FoodOrder {
     totalPrice     Float
     status         OrderStatus @default(PENDING)
     location       String
-    foodOrderItems OrderItem[]
+    foodOrderItems OrderItem[] // nested create will work now
     createdAt      DateTime    @default(now())
     updatedAt      DateTime    @updatedAt
 }
@@ -70,8 +70,8 @@ model OrderItem {
     foodId   String
     food     Food      @relation(fields: [foodId], references: [id])
     quantity Int
-    orderId  String
     order    FoodOrder @relation(fields: [orderId], references: [id])
+    orderId  String
     User     User?     @relation(fields: [userId], references: [id])
     userId   String?
 }
