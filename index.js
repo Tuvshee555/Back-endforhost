@@ -22,11 +22,13 @@ app.use(
       "http://localhost:3001",
       "https://food-delivery-customer.vercel.app",
       "https://food-delivery-admin-peach.vercel.app",
+      "https://food-delivery-admin-z918.vercel.app", // <-- add this
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
+
 
 
 app.use(express.json());
