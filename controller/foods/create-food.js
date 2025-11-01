@@ -1,8 +1,13 @@
-import { prisma } from "../../prismaClient.js";
+import { prisma } from "../../prismaClient";
 
-// CREATE FOOD
 export const createFood = async (req, res) => {
   const { foodName, price, image, ingredients, categoryId } = req.body;
+
+  if (!categoryId) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Category is required" });
+  }
 
   try {
     const newFood = await prisma.food.create({
@@ -11,105 +16,25 @@ export const createFood = async (req, res) => {
         price: parseFloat(price),
         image,
         ingredients,
-        categoryId: categoryId,
+        categoryId,
       },
     });
 
-    // Map response for frontend
-    const foods = await prisma.food.findMany({
-      include: { category: true },
-    });
-
-    const mappedFoods = foods.map(f => ({
+    const foods = await prisma.food.findMany({ include: { category: true } });
+    const mappedFoods = foods.map((f) => ({
       _id: f.id,
       foodName: f.foodName,
       price: f.price,
       image: f.image,
       ingredients: f.ingredients,
-      category: f.category ? f.category.id : "",
+      category: f.category
+        ? { id: f.category.id, categoryName: f.category.categoryName }
+        : null,
     }));
 
     res.status(200).json(mappedFoods);
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Error creating food" });
-  }
-};
-
-// GET FOOD
-export const getFood = async (req, res) => {
-  try {
-    const foods = await prisma.food.findMany({ include: { category: true } });
-
-    const mappedFoods = foods.map(f => ({
-      _id: f.id,
-      foodName: f.foodName,
-      price: f.price,
-      image: f.image,
-      ingredients: f.ingredients,
-      category: f.category ? f.category.id : "",
-    }));
-
-    res.status(200).json(mappedFoods);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Error fetching foods" });
-  }
-};
-
-// UPDATE FOOD
-export const updateFood = async (req, res) => {
-  const { _id, foodName, price, image, ingredients, category } = req.body;
-
-  try {
-    await prisma.food.update({
-      where: { id: _id },
-      data: {
-        foodName,
-        price: parseFloat(price),
-        image,
-        ingredients,
-        categoryId: category,
-      },
-    });
-
-    const foods = await prisma.food.findMany({ include: { category: true } });
-    const mappedFoods = foods.map(f => ({
-      _id: f.id,
-      foodName: f.foodName,
-      price: f.price,
-      image: f.image,
-      ingredients: f.ingredients,
-      category: f.category ? f.category.id : "",
-    }));
-
-    res.status(200).json(mappedFoods);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Error updating food" });
-  }
-};
-
-// DELETE FOOD
-export const deleteFood = async (req, res) => {
-  const { _id } = req.params;
-
-  try {
-    await prisma.food.delete({ where: { id: _id } });
-
-    const foods = await prisma.food.findMany({ include: { category: true } });
-    const mappedFoods = foods.map(f => ({
-      _id: f.id,
-      foodName: f.foodName,
-      price: f.price,
-      image: f.image,
-      ingredients: f.ingredients,
-      category: f.category ? f.category.id : "",
-    }));
-
-    res.status(200).json(mappedFoods);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Error deleting food" });
   }
 };
