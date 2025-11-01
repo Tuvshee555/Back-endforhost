@@ -1,4 +1,4 @@
-import { prisma } from "../../prismaClient";
+import { prisma } from "../../prismaClient.js";
 
 export const createFood = async (req, res) => {
   const { foodName, price, image, ingredients, categoryId } = req.body;
