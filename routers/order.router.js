@@ -12,6 +12,6 @@ orderRouter.delete("/",  deleteFoodOrder);
 // orderRouter.get("/:_id",  getFoodOrder);
 orderRouter.get("/user/:userId", getFoodOrder);
 
-orderRouter.patch("/:_id", updatedFoodOrder);
+orderRouter.patch("/:id", updatedFoodOrder);
 
 orderRouter.get("/", getAllOrder);

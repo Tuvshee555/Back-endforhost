@@ -1,7 +1,7 @@
 import { prisma } from "../../prismaClient.js";
 
 export const updatedFoodOrder = async (req, res) => {
-  const { id } = req.params; // Prisma-friendly param
+  const { id } = req.params; // ✅ now matches route
   const updateData = req.body;
 
   try {
@@ -9,11 +9,7 @@ export const updatedFoodOrder = async (req, res) => {
       where: { id },
       data: updateData,
       include: {
-        foodOrderItems: {
-          include: {
-            food: true,
-          },
-        },
+        foodOrderItems: { include: { food: true } },
       },
     });
 
@@ -22,10 +18,10 @@ export const updatedFoodOrder = async (req, res) => {
     console.error("Error while updating food order:", error);
 
     if (error.code === "P2025") {
-      // Prisma error for record not found
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
     res.status(500).json({ success: false, message: `Error while updating food order: ${error.message}` });
   }
 };
+

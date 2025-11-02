@@ -24,7 +24,7 @@ app.use(
       "https://food-delivery-admin-peach.vercel.app",
       "https://food-delivery-admin-z918.vercel.app", // <-- add this
     ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", , "PATCH"],
     credentials: true,
   })
 );
