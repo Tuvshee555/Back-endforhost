@@ -14,7 +14,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// CORS: allow frontend domain
+// CORS
 app.use(
   cors({
     origin: [
@@ -22,14 +22,12 @@ app.use(
       "http://localhost:3001",
       "https://food-delivery-customer.vercel.app",
       "https://food-delivery-admin-peach.vercel.app",
-      "https://food-delivery-admin-z918.vercel.app", // <-- add this
+      "https://food-delivery-admin-z918.vercel.app",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", , "PATCH"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   })
 );
-
-
 
 app.use(express.json());
 
@@ -45,6 +43,4 @@ app.use("/qpay", qpayRouter);
 app.get("/", (req, res) => res.send("🚀 Backend Running"));
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
