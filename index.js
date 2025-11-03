@@ -44,3 +44,7 @@ app.get("/", (req, res) => res.send("🚀 Backend Running"));
 
 // Start server
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+console.log("QPAY_USERNAME:", process.env.QPAY_USERNAME);
+console.log("QPAY_PASSWORD:", process.env.QPAY_PASSWORD);
+console.log("QPAY_BASE_URL:", process.env.QPAY_BASE_URL);

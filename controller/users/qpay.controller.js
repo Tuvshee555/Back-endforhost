@@ -2,83 +2,49 @@ import axios from "axios";
 import { prisma } from "../../prismaClient.js";
 
 const QPAY_BASE_URL = process.env.QPAY_BASE_URL;
-
 let cachedToken = null;
 let tokenExpiry = null;
 
-// Fetch QPay Access Token
-async function getAccessToken() {
+// ✅ Get Access Token (QPay)
+export async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiry) {
-    console.log("Using cached token:", cachedToken);
+    console.log("✅ Using cached token");
     return cachedToken;
   }
 
   try {
-    const res = await axios.post(
-      `${QPAY_BASE_URL}/auth/token`,
-      {}, // empty body is fine
-      {
-        auth: {
-          username: process.env.QPAY_USERNAME,
-          password: process.env.QPAY_PASSWORD,
-        },
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    const body = {
+      username: process.env.QPAY_USERNAME,
+      password: process.env.QPAY_PASSWORD,
+    };
 
-    console.log("Token response from QPay:", res.data);
+    // 🔥 Some QPay sandbox servers require both Basic Auth AND body
+    const res = await axios.post(`${QPAY_BASE_URL}/auth/token`, body, {
+      auth: {
+        username: process.env.QPAY_USERNAME,
+        password: process.env.QPAY_PASSWORD,
+      },
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
     cachedToken = res.data.access_token;
-    if (!cachedToken) throw new Error("No access_token in response");
+    tokenExpiry = Date.now() + (res.data.expires_in - 30) * 1000;
+    console.log("✅ New QPay token backend:", cachedToken);
 
-    tokenExpiry = Date.now() + (res.data.expires_in - 30) * 1000; // 30s buffer
     return cachedToken;
   } catch (err) {
-    console.error("Failed to get QPay token:", err.response?.data || err.message);
+    console.error("❌ Failed to get QPay token:", err.response?.data || err.message);
     throw err;
   }
 }
 
-// async function getAccessToken() {
-//   if (cachedToken && Date.now() < tokenExpiry) {
-//     console.log("Using cached token:", cachedToken);
-//     return cachedToken;
-//   }
-
-//   try {
-//     const res = await axios.post(
-//       `${QPAY_BASE_URL}/auth/token`,
-//       {},
-//       {
-//         auth: {
-//           username: process.env.QPAY_USERNAME,
-//           password: process.env.QPAY_PASSWORD,
-//         },
-//         headers: { "Content-Type": "application/json" },
-//         body: { "username": "DELIVERY_APP",
-//   "password": "NwlvD0ro"},
-//       }
-//     );
-
-//     console.log("Token response from QPay:", res.data);
-
-//     cachedToken = res.data.access_token;
-//     if (!cachedToken) throw new Error("No access_token in response");
-
-//     tokenExpiry = Date.now() + (res.data.expires_in - 30) * 1000; // 30s buffer
-//     return cachedToken;
-//   } catch (err) {
-//     console.error("Failed to get QPay token:", err.response?.data || err.message);
-//     throw err; // propagate so caller knows
-//   }
-// }
-
-
-// Create invoice
+// ✅ Create invoice
 export const createInvoice = async (req, res) => {
   try {
     const { orderId, amount } = req.body;
-    if (!orderId || !amount || amount <= 0)
+    if (!orderId || !amount)
       return res.status(400).json({ error: "Invalid orderId or amount" });
 
     const token = await getAccessToken();
@@ -100,43 +66,28 @@ export const createInvoice = async (req, res) => {
         },
       }
     );
-    console.log("Invoice response:", invoiceRes.data);
-console.log("Creating invoice with:", { orderId, amount });
 
-    if (!invoiceRes.data || !invoiceRes.data.invoice_id)
-      return res.status(500).json({ error: "Invoice creation failed" });
+    const { qr_text, qr_image, invoice_id } = invoiceRes.data;
 
-    const payment = await prisma.payment.create({
-      data: {
-        invoiceId: invoiceRes.data.invoice_id,
-        orderId,
-        amount: Number(amount),
-        status: "PENDING",
-      },
+    // Save to DB (optional)
+    await prisma.payment.create({
+      data: { invoiceId: invoice_id, orderId, amount: Number(amount), status: "PENDING" },
     });
 
-    res.json({
-      qr_image: invoiceRes.data.qr_image,
-      qr_text: invoiceRes.data.qr_text,
-      invoice_id: invoiceRes.data.invoice_id,
-      payment,
-    });
-    console.log("Invoice response:", invoiceRes.data);
+    res.json({ qr_text, qr_image, invoice_id });
   } catch (err) {
     console.error("❌ Create invoice error:", err.response?.data || err.message);
     res.status(500).json({ error: err.response?.data || err.message });
   }
 };
 
-// Check payment
+// ✅ Check payment status
 export const checkPayment = async (req, res) => {
   try {
     const { invoiceId } = req.body;
     if (!invoiceId) return res.status(400).json({ error: "InvoiceId required" });
 
     const token = await getAccessToken();
-    console.log(token);
-    
 
     const statusRes = await axios.post(
       `${QPAY_BASE_URL}/payment/check`,
@@ -151,39 +102,22 @@ export const checkPayment = async (req, res) => {
         data: { status: "PAID" },
       });
     }
-    console.log("Payment check response:", statusRes.data);
 
-    res.json({ paid, data: statusRes.data });
+    res.json({ paid });
   } catch (err) {
     console.error("❌ Check payment error:", err.response?.data || err.message);
     res.status(500).json({ error: "Check payment failed" });
   }
 };
 
-// Webhook for QPay callback
+// ✅ Webhook (optional)
 export const webhook = async (req, res) => {
   try {
-    const { object_id, payment_status } = req.body;
-    if (!object_id) return res.status(400).json({ error: "InvoiceId missing" });
-
-    const payment = await prisma.payment.findUnique({ where: { invoiceId: object_id } });
-    if (!payment) return res.status(400).json({ error: "Invalid invoice" });
-
-    if (payment_status === "PAID") {
-      await prisma.payment.update({
-        where: { invoiceId: object_id },
-        data: { status: "PAID" },
-      });
-    }
-    console.log("Webhook payload:", req.body);
-
-
+    console.log("Webhook received:", req.body);
     res.json({ received: true });
   } catch (err) {
     console.error("Webhook error:", err.message);
     res.status(500).json({ error: "Webhook failed" });
   }
 };
-console.log("QPAY_USERNAME:", process.env.QPAY_USERNAME);
-console.log("QPAY_PASSWORD:", process.env.QPAY_PASSWORD ? "******" : "MISSING");
-console.log("QPAY_BASE_URL:", process.env.QPAY_BASE_URL);
+
