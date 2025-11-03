@@ -8,24 +8,71 @@ let tokenExpiry = null;
 
 // Fetch QPay Access Token
 async function getAccessToken() {
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+  if (cachedToken && Date.now() < tokenExpiry) {
+    console.log("Using cached token:", cachedToken);
+    return cachedToken;
+  }
 
-  const res = await axios.post(
-    `${QPAY_BASE_URL}/auth/token`,
-    {},
-    {
-      auth: {
-        username: process.env.QPAY_USERNAME,
-        password: process.env.QPAY_PASSWORD,
-      },
-      headers: { "Content-Type": "application/json" },
-    }
-  );
+  try {
+    const res = await axios.post(
+      `${QPAY_BASE_URL}/auth/token`,
+      {}, // empty body is fine
+      {
+        auth: {
+          username: process.env.QPAY_USERNAME,
+          password: process.env.QPAY_PASSWORD,
+        },
+        headers: { "Content-Type": "application/json" },
+      }
+    );
 
-  cachedToken = res.data.access_token;
-  tokenExpiry = Date.now() + (res.data.expires_in - 30) * 1000; // 30s buffer
-  return cachedToken;
+    console.log("Token response from QPay:", res.data);
+
+    cachedToken = res.data.access_token;
+    if (!cachedToken) throw new Error("No access_token in response");
+
+    tokenExpiry = Date.now() + (res.data.expires_in - 30) * 1000; // 30s buffer
+    return cachedToken;
+  } catch (err) {
+    console.error("Failed to get QPay token:", err.response?.data || err.message);
+    throw err;
+  }
 }
+
+// async function getAccessToken() {
+//   if (cachedToken && Date.now() < tokenExpiry) {
+//     console.log("Using cached token:", cachedToken);
+//     return cachedToken;
+//   }
+
+//   try {
+//     const res = await axios.post(
+//       `${QPAY_BASE_URL}/auth/token`,
+//       {},
+//       {
+//         auth: {
+//           username: process.env.QPAY_USERNAME,
+//           password: process.env.QPAY_PASSWORD,
+//         },
+//         headers: { "Content-Type": "application/json" },
+//         body: { "username": "DELIVERY_APP",
+//   "password": "NwlvD0ro"},
+//       }
+//     );
+
+//     console.log("Token response from QPay:", res.data);
+
+//     cachedToken = res.data.access_token;
+//     if (!cachedToken) throw new Error("No access_token in response");
+
+//     tokenExpiry = Date.now() + (res.data.expires_in - 30) * 1000; // 30s buffer
+//     return cachedToken;
+//   } catch (err) {
+//     console.error("Failed to get QPay token:", err.response?.data || err.message);
+//     throw err; // propagate so caller knows
+//   }
+// }
+
 
 // Create invoice
 export const createInvoice = async (req, res) => {
@@ -53,6 +100,8 @@ export const createInvoice = async (req, res) => {
         },
       }
     );
+    console.log("Invoice response:", invoiceRes.data);
+console.log("Creating invoice with:", { orderId, amount });
 
     if (!invoiceRes.data || !invoiceRes.data.invoice_id)
       return res.status(500).json({ error: "Invoice creation failed" });
@@ -72,6 +121,7 @@ export const createInvoice = async (req, res) => {
       invoice_id: invoiceRes.data.invoice_id,
       payment,
     });
+    console.log("Invoice response:", invoiceRes.data);
   } catch (err) {
     console.error("❌ Create invoice error:", err.response?.data || err.message);
     res.status(500).json({ error: err.response?.data || err.message });
@@ -85,6 +135,8 @@ export const checkPayment = async (req, res) => {
     if (!invoiceId) return res.status(400).json({ error: "InvoiceId required" });
 
     const token = await getAccessToken();
+    console.log(token);
+    
 
     const statusRes = await axios.post(
       `${QPAY_BASE_URL}/payment/check`,
@@ -99,6 +151,7 @@ export const checkPayment = async (req, res) => {
         data: { status: "PAID" },
       });
     }
+    console.log("Payment check response:", statusRes.data);
 
     res.json({ paid, data: statusRes.data });
   } catch (err) {
@@ -122,6 +175,8 @@ export const webhook = async (req, res) => {
         data: { status: "PAID" },
       });
     }
+    console.log("Webhook payload:", req.body);
+
 
     res.json({ received: true });
   } catch (err) {
@@ -129,3 +184,6 @@ export const webhook = async (req, res) => {
     res.status(500).json({ error: "Webhook failed" });
   }
 };
+console.log("QPAY_USERNAME:", process.env.QPAY_USERNAME);
+console.log("QPAY_PASSWORD:", process.env.QPAY_PASSWORD ? "******" : "MISSING");
+console.log("QPAY_BASE_URL:", process.env.QPAY_BASE_URL);
