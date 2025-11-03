@@ -50,22 +50,27 @@ export const createInvoice = async (req, res) => {
     const token = await getAccessToken();
 
     const invoiceRes = await axios.post(
-      `${QPAY_BASE_URL}/invoice`,
-      {
-        invoice_code: process.env.QPAY_INVOICE_CODE,
-        sender_invoice_no: orderId,
-        invoice_description: `Payment for order ${orderId}`,
-        amount,
-        callback_url: `${process.env.BACKEND_URL}/qpay/webhook`,
-        sender_staff_code: "system",
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+  `${QPAY_BASE_URL}/invoice`,
+  {
+    invoice_code: process.env.QPAY_INVOICE_CODE,
+    sender_invoice_no: orderId,
+    invoice_description: `Payment for order ${orderId}`,
+    amount,
+    callback_url: `${process.env.BACKEND_URL}/qpay/webhook`,
+    sender_staff_code: "system",
+
+    // 👇 ADD THIS LINE
+    // invoice_receiver_code: process.env.QPAY_USERNAME || "DELIVERY_APP",
+    invoice_receiver_code: "terminal" || process.env.QPAY_INVOICE_CODE
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  }
+);
+
 
     const { qr_text, qr_image, invoice_id } = invoiceRes.data;
 
