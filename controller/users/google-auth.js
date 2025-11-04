@@ -15,7 +15,7 @@ export const googleAuth = async (req, res) => {
     });
 
     const payload = ticket.getPayload();
-    console.log("Google token payload:", payload);
+    // console.log("Google token payload:", payload);
 
     const email = payload.email;
     if (!email) return res.status(400).json({ message: "Email not found in token" });
