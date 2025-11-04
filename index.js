@@ -8,6 +8,7 @@ import { categoryRouter } from "./routers/category.router.js";
 import { items } from "./routers/items.router.js";
 import { qpayRouter } from "./routers/qpay.router.js";
 import { orderRouter } from "./routers/order.router.js";
+import { statRouter } from "./routers/stat.router.js";
 
 dotenv.config();
 
@@ -38,6 +39,8 @@ app.use("/user", userRouter);
 app.use("/category", categoryRouter);
 app.use("/items", items);
 app.use("/qpay", qpayRouter);
+app.use("/stats", statRouter);
+
 
 // Health check
 app.get("/", (req, res) => res.send("🚀 Backend Running"));

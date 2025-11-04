@@ -1,5 +1,5 @@
 import express from "express";
-import { createInvoice, checkPayment, webhook } from "../controller/users/qpay.controller.js";
+import { checkPayment, createInvoice, webhook } from "../controller/qpay/qpay.controller.js";
 
 export const qpayRouter = express.Router();
 qpayRouter.post("/create", createInvoice);
