@@ -29,8 +29,8 @@ model Payment {
     invoiceId String        @unique
     amount    Float
     status    PaymentStatus @default(PENDING)
-    qrText    String?       @db.Text
-    // qrImage   String?       @db.Text
+    qrText    String?
+    // qrImage   String?      
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
