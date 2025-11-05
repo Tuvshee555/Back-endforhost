@@ -44,16 +44,16 @@ export const createInvoice = async (req, res) => {
       return res.status(400).json({ error: "Invalid orderId or amount" });
 
     // Check if invoice already exists
-    const existing = await prisma.payment.findUnique({ where: { orderId } });
+    const existing = await prisma.payment.findFirst({ where: { orderId } });
 
-   if (existing && existing.status === "PAID") {
+if (existing && existing.status === "PAID") {
   return res.status(400).json({ error: "Invoice already paid" });
 }
 
-// Always create a new invoice if the old one expired or stuck
 if (existing && existing.status === "PENDING") {
-  await prisma.payment.delete({ where: { orderId } });
+  await prisma.payment.delete({ where: { id: existing.id } });
 }
+
 
 
     const token = await getAccessToken();
