@@ -90,7 +90,7 @@ if (existing && existing.status === "PENDING") {
         amount: Number(amount),
         status: "PENDING",
         qrText: qr_text,
-        // qrImage: qr_image, // delete this shit 
+        qrImage: qr_image, // delete this shit 
       },
     });
 
