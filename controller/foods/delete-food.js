@@ -1,10 +1,21 @@
 import { prisma } from "../../prismaClient.js";
 
+// 🧩 Delete single food by ID
 export const deleteFood = async (req, res) => {
-  const { id } = req.params; // Prisma uses `id` instead of `_id`
+  const { id } = req.params;
 
   try {
-    // Delete the food item
+    // Delete related sizes first (if they exist)
+    await prisma.foodSize.deleteMany({
+      where: { foodId: id },
+    });
+
+    // Delete related order items (optional)
+    await prisma.orderItem.deleteMany({
+      where: { foodId: id },
+    });
+
+    // Finally delete the food
     await prisma.food.delete({
       where: { id },
     });
@@ -13,7 +24,6 @@ export const deleteFood = async (req, res) => {
   } catch (error) {
     console.error("Error deleting food:", error);
 
-    // If the food with given id doesn't exist, Prisma throws an error
     if (error.code === "P2025") {
       return res.status(404).json({ success: false, message: "Food not found" });
     }

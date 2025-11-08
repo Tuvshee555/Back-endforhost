@@ -1,0 +1,21 @@
+-- AlterTable
+ALTER TABLE "Food" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "extraImages" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "video" TEXT;
+
+-- AlterTable
+ALTER TABLE "FoodOrder" ALTER COLUMN "updatedAt" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE "FoodSize" (
+    "id" TEXT NOT NULL,
+    "foodId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "stock" INTEGER,
+
+    CONSTRAINT "FoodSize_pkey" PRIMARY KEY ("id")
+);
+
+-- AddForeignKey
+ALTER TABLE "FoodSize" ADD CONSTRAINT "FoodSize_foodId_fkey" FOREIGN KEY ("foodId") REFERENCES "Food"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
