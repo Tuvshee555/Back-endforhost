@@ -12,7 +12,13 @@ model User {
     email            String      @unique
     password         String?
     phonenumber      String?
-    address          String?
+    firstName        String?
+    lastName         String?
+    city             String?
+    district         String?
+    khoroo           String?
+    address          String? // street/building info
+    notes            String? // optional details (door code, etc.)
     role             Role        @default(USER)
     isVerified       Boolean     @default(false)
     resetToken       String?
