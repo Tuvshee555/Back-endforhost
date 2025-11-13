@@ -3,6 +3,8 @@ import { prisma } from "../../prismaClient.js";
 export const createFoodOrder = async (req, res) => {
   const { totalPrice, userId, items, location } = req.body;
 
+  
+
   if (!location) {
     return res.status(400).json({ success: false, message: "Location is required" });
   }

@@ -1,113 +1,112 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-    id               String      @id @default(uuid())
-    email            String      @unique
-    password         String?
-    phonenumber      String?
-    firstName        String?
-    lastName         String?
-    city             String?
-    district         String?
-    khoroo           String?
-    address          String? // street/building info
-    notes            String? // optional details (door code, etc.)
-    role             Role        @default(USER)
-    isVerified       Boolean     @default(false)
-    resetToken       String?
-    resetTokenExpiry DateTime?
-    createdAt        DateTime    @default(now())
-    updatedAt        DateTime    @updatedAt
-    FoodOrder        FoodOrder[]
-    orderedFoods     OrderItem[]
+  id               String      @id @default(uuid())
+  email            String      @unique
+  password         String?
+  phonenumber      String?
+  address          String?
+  role             Role        @default(USER)
+  isVerified       Boolean     @default(false)
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  city             String?
+  district         String?
+  firstName        String?
+  khoroo           String?
+  lastName         String?
+  notes            String?
+  FoodOrder        FoodOrder[]
+  orderedFoods     OrderItem[]
 }
 
 model Payment {
-    id        String        @id @default(uuid())
-    orderId   String        @unique
-    invoiceId String        @unique
-    amount    Float
-    status    PaymentStatus @default(PENDING)
-    qrText    String?
-    qrImage   String?
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id        String        @id @default(uuid())
+  invoiceId String        @unique
+  orderId   String        @unique
+  amount    Float
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  qrText    String?
+  status    PaymentStatus @default(PENDING)
+  qrImage   String?
 }
 
 model Food {
-    id          String      @id @default(uuid())
-    foodName    String
-    price       Float
-    image       String
-    extraImages String[]    @default([])
-    video       String?
-    address     String?
-    ingredients String
-    categoryId  String?
-    category    Category?   @relation(fields: [categoryId], references: [id])
-    OrderItem   OrderItem[]
-    sizes       FoodSize[]
-    createdAt   DateTime    @default(now())
-    updatedAt   DateTime    @default(now()) @updatedAt
+  id          String      @id @default(uuid())
+  foodName    String
+  price       Float
+  image       String
+  address     String?
+  ingredients String
+  categoryId  String?
+  createdAt   DateTime    @default(now())
+  extraImages String[]    @default([])
+  updatedAt   DateTime    @default(now()) @updatedAt
+  video       String?
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  sizes       FoodSize[]
+  OrderItem   OrderItem[]
 }
 
 model FoodSize {
-    id     String @id @default(uuid())
-    foodId String
-    label  String // e.g. "S", "M", "L", "20cm", "Tall", etc.
-    stock  Int? // optional available stock
-    food   Food   @relation(fields: [foodId], references: [id])
+  id     String @id @default(uuid())
+  foodId String
+  label  String
+  stock  Int?
+  food   Food   @relation(fields: [foodId], references: [id])
 }
 
 model Category {
-    id           String @id @default(uuid())
-    categoryName String
-    foods        Food[]
+  id           String @id @default(uuid())
+  categoryName String
+  foods        Food[]
 }
 
 model FoodOrder {
-    id             String      @id @default(uuid())
-    userId         String
-    totalPrice     Float
-    status         OrderStatus @default(PENDING)
-    location       String
-    createdAt      DateTime    @default(now())
-    updatedAt      DateTime    @default(now()) @updatedAt
-    user           User        @relation(fields: [userId], references: [id])
-    foodOrderItems OrderItem[]
+  id             String      @id @default(uuid())
+  userId         String
+  totalPrice     Float
+  status         OrderStatus @default(PENDING)
+  location       String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @default(now()) @updatedAt
+  user           User        @relation(fields: [userId], references: [id])
+  foodOrderItems OrderItem[]
 }
 
 model OrderItem {
-    id       String    @id @default(uuid())
-    foodId   String
-    quantity Int
-    orderId  String
-    userId   String?
-    food     Food      @relation(fields: [foodId], references: [id])
-    order    FoodOrder @relation(fields: [orderId], references: [id])
-    User     User?     @relation(fields: [userId], references: [id])
+  id       String    @id @default(uuid())
+  foodId   String
+  quantity Int
+  orderId  String
+  userId   String?
+  food     Food      @relation(fields: [foodId], references: [id])
+  order    FoodOrder @relation(fields: [orderId], references: [id])
+  User     User?     @relation(fields: [userId], references: [id])
 }
 
 enum Role {
-    USER
-    ADMIN
+  USER
+  ADMIN
 }
 
 enum PaymentStatus {
-    PENDING
-    PAID
+  PENDING
+  PAID
 }
 
 enum OrderStatus {
-    PENDING
-    CANCELLED
-    DELIVERED
+  PENDING
+  CANCELLED
+  DELIVERED
 }

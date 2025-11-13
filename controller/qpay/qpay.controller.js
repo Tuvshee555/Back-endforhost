@@ -40,26 +40,21 @@ export async function getAccessToken() {
 export const createInvoice = async (req, res) => {
   try {
     const { orderId, amount } = req.body;
+
     if (!orderId || !amount || amount <= 0)
       return res.status(400).json({ error: "Invalid orderId or amount" });
 
-    // Check if invoice already exists
-    const existing = await prisma.payment.findFirst({ where: { orderId } });
-
-if (existing && existing.status === "PAID") {
-  return res.status(400).json({ error: "Invoice already paid" });
-}
-
-if (existing && existing.status === "PENDING") {
-  await prisma.payment.delete({ where: { id: existing.id } });
-}
-
-
+    // Remove ALL existing payments for this order
+    await prisma.payment.deleteMany({ where: { orderId } });
 
     const token = await getAccessToken();
 
-    // Generate a unique invoice number for QPay
-    const uniqueInvoiceNo = `${orderId}_${Date.now()}`;
+    // Create short invoice number
+    const shortId = orderId.replace(/-/g, "").slice(0, 20);
+    const timestamp = Date.now().toString().slice(-10);
+    const uniqueInvoiceNo = `${shortId}_${timestamp}`;
+
+    console.log("📌 QPAY sender_invoice_no:", uniqueInvoiceNo);
 
     const invoiceRes = await axios.post(
       `${QPAY_BASE_URL}/invoice`,
@@ -82,7 +77,6 @@ if (existing && existing.status === "PENDING") {
 
     const { qr_text, qr_image, invoice_id } = invoiceRes.data;
 
-    // Save invoice in DB
     await prisma.payment.create({
       data: {
         invoiceId: invoice_id,
@@ -90,16 +84,19 @@ if (existing && existing.status === "PENDING") {
         amount: Number(amount),
         status: "PENDING",
         qrText: qr_text,
-        qrImage: qr_image, // delete this shit 
+        qrImage: qr_image,
       },
     });
 
-    res.json({ qr_text, qr_image, invoice_id });
+    return res.json({ qr_text, qr_image, invoice_id });
+
   } catch (err) {
     console.error("❌ Create invoice error:", err.response?.data || err.message);
-    res.status(500).json({ error: err.response?.data || err.message });
+    return res.status(500).json({ error: err.response?.data || err.message });
   }
 };
+
+
 
 // ✅ Check payment status manually
 export const checkPayment = async (req, res) => {
