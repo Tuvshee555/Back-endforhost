@@ -9,6 +9,8 @@ import { items } from "./routers/items.router.js";
 import { qpayRouter } from "./routers/qpay.router.js";
 import { orderRouter } from "./routers/order.router.js";
 import { statRouter } from "./routers/stat.router.js";
+import { cartRouter } from "./routers/cart.router.js";
+
 
 dotenv.config();
 
@@ -40,6 +42,8 @@ app.use("/category", categoryRouter);
 app.use("/items", items);
 app.use("/qpay", qpayRouter);
 app.use("/stats", statRouter);
+app.use("/cart", cartRouter);
+
 
 
 // Health check

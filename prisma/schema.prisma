@@ -27,6 +27,7 @@ model User {
   notes            String?
   FoodOrder        FoodOrder[]
   orderedFoods     OrderItem[]
+  cartItems        CartItem[]
 }
 
 model Payment {
@@ -56,6 +57,7 @@ model Food {
   category    Category?   @relation(fields: [categoryId], references: [id])
   sizes       FoodSize[]
   OrderItem   OrderItem[]
+  cartItems   CartItem[]
 }
 
 model FoodSize {
@@ -93,6 +95,21 @@ model OrderItem {
   food     Food      @relation(fields: [foodId], references: [id])
   order    FoodOrder @relation(fields: [orderId], references: [id])
   User     User?     @relation(fields: [userId], references: [id])
+}
+
+model CartItem {
+  id           String   @id @default(uuid())
+  userId       String
+  foodId       String
+  quantity     Int      @default(1)
+  selectedSize String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+  food Food @relation(fields: [foodId], references: [id])
+
+  @@unique([userId, foodId, selectedSize]) // one cart entry per item+size
 }
 
 enum Role {
