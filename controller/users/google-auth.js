@@ -15,15 +15,17 @@ export const googleAuth = async (req, res) => {
     });
 
     const payload = ticket.getPayload();
-    // console.log("Google token payload:", payload);
-
-    const email = payload.email;
+    let email = payload.email;
     if (!email) return res.status(400).json({ message: "Email not found in token" });
 
-    // Find user in Prisma
+    // 🔥 Normalize email EXACTLY like OTP login
+    email = email.trim().toLowerCase();
+
+    console.log("Google normalized email:", email);
+
+    // 🔥 Now Google login and OTP login use SAME identity
     let user = await prisma.user.findUnique({ where: { email } });
 
-    // Create user if not exists
     if (!user) {
       user = await prisma.user.create({
         data: {
@@ -39,9 +41,10 @@ export const googleAuth = async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.json({ token: jwtToken, user });
+    return res.json({ token: jwtToken, user });
   } catch (err) {
     console.error("Google auth error:", err);
-    res.status(401).json({ message: "Google authentication failed" });
+    return res.status(401).json({ message: "Google authentication failed" });
   }
 };
+

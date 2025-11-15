@@ -3,15 +3,17 @@ import { otpStore } from "../../utils/otp-store.js";
 
 export const sendOtp = async (req, res) => {
   try {
-    const { email } = req.body;
+    let { email } = req.body;
 
     if (!email) return res.status(400).json({ message: "Имэйл оруулна уу" });
+
+    email = email.trim().toLowerCase(); // NORMALIZE
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     otpStore.set(email, {
       otp,
-      expiresAt: Date.now() + 1000 * 300, // 5 minutes
+      expiresAt: Date.now() + 1000 * 300, // 5min
     });
 
     await transporter.sendMail({

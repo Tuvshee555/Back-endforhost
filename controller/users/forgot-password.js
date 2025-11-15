@@ -13,7 +13,7 @@ export const forgotPassword = async (req, res) => {
 
     console.log("User found:", user.email);
 
-    // Use user.id (Prisma primary key), not user._id
+    // Use user.id (Prisma primary key), not user.id
     const resetToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "15m",
     });

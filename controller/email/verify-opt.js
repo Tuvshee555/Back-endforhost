@@ -3,49 +3,76 @@ import { prisma } from "../../prismaClient.js";
 import jwt from "jsonwebtoken";
 
 export const verifyOtp = async (req, res) => {
-  const { email, code } = req.body;
+  let { email, code } = req.body;
 
-  if (!email || !code)
+  console.log("=== VERIFY OTP DEBUG START ===");
+  console.log("Raw request body:", req.body);
+
+  if (!email || !code) {
+    console.log("Missing fields");
     return res.status(400).json({ message: "Мэдээлэл дутуу" });
+  }
 
-  const record = otpStore.get(email);
-  if (!record) return res.status(400).json({ message: "Код илгээгүй" });
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedCode = String(code).trim();
 
-  if (Date.now() > record.expiresAt) {
-    otpStore.delete(email);
+  console.log("Normalized Email:", normalizedEmail);
+  console.log("Normalized Code:", normalizedCode);
+
+  const storedValue = otpStore.get(normalizedEmail);
+  const rawStored = otpStore.get(email); // check both forms
+
+  console.log("Stored Value (normalized):", storedValue);
+  console.log("Stored Value (raw):", rawStored);
+  console.log("Entire otpStore:", otpStore);
+
+  // Check for wrong key
+  if (!storedValue) {
+    console.log("OTP not found under normalized key");
+    return res.status(400).json({ message: "Код илгээгүй" });
+  }
+
+  // Expiration
+  if (Date.now() > storedValue.expiresAt) {
+    console.log("OTP expired. expiresAt =", storedValue.expiresAt);
+    otpStore.delete(normalizedEmail);
     return res.status(400).json({ message: "Код хугацаа дууссан" });
   }
 
-  if (record.otp !== code) {
+
+  if (String(storedValue.otp) !== normalizedCode) {
     return res.status(400).json({ message: "Код буруу" });
   }
 
-  otpStore.delete(email);
+  otpStore.delete(normalizedEmail);
 
-  let user = await prisma.user.findUnique({ where: { email } });
+  // now continue your normal login logic
+  let user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
   if (!user) {
     user = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         role: "USER",
       },
     });
   }
 
   const jwtToken = jwt.sign(
-        { userId: user.id, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-  
-      return res.json({
-        success: true,
-        token: jwtToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-        },
-      });
+    { userId: user.id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
+  return res.json({
+    success: true,
+    token: jwtToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    },
+  });
 };
+
+
