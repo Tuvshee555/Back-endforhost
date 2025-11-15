@@ -10,7 +10,7 @@ import { qpayRouter } from "./routers/qpay.router.js";
 import { orderRouter } from "./routers/order.router.js";
 import { statRouter } from "./routers/stat.router.js";
 import { cartRouter } from "./routers/cart.router.js";
-
+import { emailRouter } from "./routers/email.routes.js";
 
 dotenv.config();
 
@@ -26,6 +26,7 @@ app.use(
       "https://food-delivery-customer.vercel.app",
       "https://food-delivery-admin-peach.vercel.app",
       "https://food-delivery-admin-z918.vercel.app",
+      "https://delivery-customer.shop"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
@@ -43,6 +44,7 @@ app.use("/items", items);
 app.use("/qpay", qpayRouter);
 app.use("/stats", statRouter);
 app.use("/cart", cartRouter);
+app.use("/email", emailRouter);
 
 
 

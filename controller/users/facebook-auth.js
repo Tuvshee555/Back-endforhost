@@ -45,10 +45,15 @@ export const facebookAuth = async (req, res) => {
 
     // 🧠 STEP 4: Generate a JWT token for authentication
     const jwtToken = jwt.sign(
-      { id: user.id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
+  {
+    id: user.id,
+    userId: user.id,      // FIXED → now same as OTP
+    email: user.email,
+    role: user.role
+  },
+  process.env.JWT_SECRET,
+  { expiresIn: "7d" }
+);
 
     // 🧠 STEP 5: Send response to frontend
     res.status(200).json({ token: jwtToken, user });
