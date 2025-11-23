@@ -5,6 +5,7 @@ import { addCart } from "../controller/cart/add-cart.js";
 import { updateCart } from "../controller/cart/update-cart.js";
 import { removeCart } from "../controller/cart/remove-cart.js";
 import { clearCart } from "../controller/cart/clear-cart.js";
+import { syncCart } from "../controller/cart/sync-cart.js";
 
 export const cartRouter = Router();
 
@@ -13,3 +14,4 @@ cartRouter.post("/add", addCart);
 cartRouter.post("/update", updateCart);
 cartRouter.post("/remove", removeCart);
 cartRouter.post("/clear", clearCart);
+cartRouter.post("/sync", syncCart);
