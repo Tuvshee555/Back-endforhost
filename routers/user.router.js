@@ -10,6 +10,7 @@ import { googleAuth } from "../controller/users/google-auth.js";
 import { facebookAuth } from "../controller/users/facebook-auth.js";
 import { validateUserId } from "../middleware/validate-user-id.js";
 import { getUserById } from "../controller/users/get-user-by-id.js";
+import { createGuestUser } from "../controller/users/create-guest.js";
 
 
 
@@ -22,6 +23,7 @@ userRouter.post("/login", loginUser);
 userRouter.put("/:id", validateUserId , updateUser);
 userRouter.delete("/:id", validateUserId , deleteUser);
 userRouter.get("/:id", validateUserId, getUserById);
+userRouter.post("/guest", createGuestUser);
 
 
 // Password recovery
@@ -33,3 +35,5 @@ userRouter.post("/auth/google", googleAuth);
 
 // Facebook OAuth
 userRouter.post("/auth/facebook", facebookAuth);
+
+
