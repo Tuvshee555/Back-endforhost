@@ -58,6 +58,10 @@ model Food {
   sizes       FoodSize[]
   OrderItem   OrderItem[]
   cartItems   CartItem[]
+  isFeatured  Boolean     @default(false)
+  salesCount  Int         @default(0)
+  oldPrice    Float?
+  discount    Int?        @default(0)
 }
 
 model FoodSize {

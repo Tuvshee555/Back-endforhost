@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Food" ADD COLUMN     "discount" INTEGER DEFAULT 0,
+ADD COLUMN     "oldPrice" DOUBLE PRECISION;

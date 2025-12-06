@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Food" ADD COLUMN     "isFeatured" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "salesCount" INTEGER NOT NULL DEFAULT 0;
