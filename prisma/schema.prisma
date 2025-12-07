@@ -75,7 +75,12 @@ model FoodSize {
 model Category {
   id           String @id @default(uuid())
   categoryName String
-  foods        Food[]
+
+  parentId String? // 👈 allow category to have parent
+  parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryChildren")
+
+  foods Food[] // food can belong to any category level
 }
 
 model FoodOrder {
