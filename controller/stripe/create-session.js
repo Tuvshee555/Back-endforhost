@@ -18,16 +18,16 @@ export async function createSession(req, res) {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: { name: `Order #${orderId}` },
-            unit_amount: Math.round(totalPrice * 100),
-          },
-          quantity: 1,
-        },
-      ],
+      line_items: cart.map((i) => ({
+  price_data: {
+    currency: "usd", // or "mnt" if Stripe supports it
+    product_data: {
+      name: i.food?.name || "Food item",
+    },
+    unit_amount: Math.round((i.food?.price || i.price) * 100),
+  },
+  quantity: i.quantity,
+})),
       metadata: { orderId },
       success_url: successUrl,
       cancel_url: cancelUrl,
