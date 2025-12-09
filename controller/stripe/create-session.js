@@ -7,51 +7,41 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2024-06-20",
 });
 
-const DEFAULT_CURRENCY = "usd";
+const DEFAULT_CURRENCY = process.env.PAYMENT_CURRENCY || "usd";
 
-function cents(val) {
-  const n = Number(val);
+function toCents(v) {
+  const n = Number(v);
   if (!Number.isFinite(n)) return null;
   return Math.round(n * 100);
 }
 
 export async function createSession(req, res) {
   try {
-    // Debug: log incoming request body & headers (temporary, remove after fix)
     console.log("createSession — raw body:", req.body);
-    console.log("createSession — headers:", {
-      "content-type": req.headers["content-type"],
-      host: req.headers.host,
-    });
-
-    // Validate presence
     const { orderId: rawOrderId, totalPrice } = req.body || {};
+
     if (typeof rawOrderId === "undefined" || rawOrderId === null || rawOrderId === "") {
-      return res.status(400).json({ error: "Missing orderId in request body (received empty)", received: req.body });
+      return res.status(400).json({ error: "Missing orderId in request body", received: req.body });
     }
 
-    // Try numeric id first
+    // Determine lookup key (try numeric then string)
     const orderIdNum = Number(rawOrderId);
     let order = null;
 
     if (!Number.isNaN(orderIdNum)) {
-      // numeric id path
-      console.log("createSession — attempting numeric lookup with id =", orderIdNum);
+      console.log("createSession — numeric lookup attempt id=", orderIdNum);
       order = await prisma.foodOrder.findUnique({
         where: { id: orderIdNum },
-        include: { items: true },
       }).catch((e) => {
         console.warn("createSession — numeric lookup failed:", e?.message || e);
         return null;
       });
     }
 
-    // If not found and rawOrderId is a non-empty string, try string lookup (if your schema uses string ids)
     if (!order && typeof rawOrderId === "string") {
-      console.log("createSession — attempting string lookup with id =", rawOrderId);
+      console.log("createSession — string lookup attempt id=", rawOrderId);
       order = await prisma.foodOrder.findUnique({
         where: { id: rawOrderId },
-        include: { items: true },
       }).catch((e) => {
         console.warn("createSession — string lookup failed:", e?.message || e);
         return null;
@@ -62,41 +52,109 @@ export async function createSession(req, res) {
       return res.status(404).json({
         error: "Order not found with provided orderId",
         providedOrderId: rawOrderId,
-        note: "Server tried numeric and string lookups. Check type of foodOrder.id in your Prisma schema.",
+        note: "Server attempted numeric and string lookups. Check foodOrder.id type in Prisma schema.",
       });
     }
 
-    // Build line_items from order.items
-    const line_items = (order.items || []).map((it) => {
-      const unit = cents(it.price);
-      if (unit === null) throw new Error(`Invalid item price for item id=${it.id}`);
+    // Try to fetch order items in multiple safe ways.
+    // 1) Try include by several likely relation names
+    const candidateRelationNames = ["items", "foodOrderItems", "orderItems", "foodOrder_item", "food_order_items"];
+    let items = null;
+
+    for (const rel of candidateRelationNames) {
+      try {
+        const withRel = await prisma.foodOrder.findUnique({
+          where: { id: order.id },
+          include: { [rel]: true },
+        });
+        if (withRel && withRel[rel] && Array.isArray(withRel[rel]) && withRel[rel].length) {
+          items = withRel[rel];
+          console.log(`createSession — found items via relation include '${rel}'`);
+          break;
+        }
+      } catch (e) {
+        // include may be invalid for this relation name — ignore and try next
+        // console.warn(`include '${rel}' failed:`, e?.message || e);
+      }
+    }
+
+    // 2) If still not found, try querying common item models directly (if they exist)
+    const candidateItemModels = ["foodOrderItem", "foodOrderItems", "orderItem", "orderItems", "items"];
+    for (const modelName of candidateItemModels) {
+      if (items) break;
+      if (!prisma[modelName]) continue; // model doesn't exist on client
+      try {
+        // Try common where fields
+        const tries = [
+          { foodOrderId: order.id },
+          { orderId: order.id },
+          { order_id: order.id }, // unlikely but safe
+        ];
+        for (const where of tries) {
+          const found = await prisma[modelName].findMany({ where }).catch(() => null);
+          if (found && found.length) {
+            items = found;
+            console.log(`createSession — found items via model '${modelName}' using where=${JSON.stringify(where)}`);
+            break;
+          }
+        }
+      } catch (e) {
+        // ignore and continue
+      }
+    }
+
+    // If still no items, return a helpful error telling the dev which model/fields to inspect
+    if (!items || !items.length) {
+      return res.status(400).json({
+        error: "Could not find order items for checkout",
+        orderId: order.id,
+        note:
+          "Your Prisma schema probably uses a different relation or model name for order items. " +
+          "Open prisma/schema.prisma and check the FoodOrder model relations (look for fields referencing another model). " +
+          "Common names: items, foodOrderItems, foodOrderItem, orderItems, orderItem. " +
+          "Tell me the exact field or model name and I'll update this code.",
+      });
+    }
+
+    // Build Stripe line_items
+    const line_items = items.map((it) => {
+      // attempt to read common fields
+      const name = it.name || it.title || it.productName || it.foodName || `Item ${it.id}`;
+      const priceSource = it.price ?? it.unit_price ?? it.unitPrice ?? it.amount ?? it.cost;
+      const qty = it.quantity ?? it.qty ?? it.count ?? 1;
+      const unitCents = toCents(priceSource);
+      if (unitCents === null) throw new Error(`Invalid price for order item id=${it.id}`);
       return {
         price_data: {
           currency: DEFAULT_CURRENCY,
-          product_data: { name: it.name || `Item ${it.id}` },
-          unit_amount: unit,
+          product_data: { name },
+          unit_amount: unitCents,
         },
-        quantity: Number(it.quantity) || 1,
+        quantity: Number(qty) || 1,
       };
     });
 
-    // Add delivery fee if present
-    if (typeof order.deliveryFee !== "undefined") {
-      const d = cents(order.deliveryFee);
-      if (d !== null && d > 0) {
-        line_items.push({
-          price_data: {
-            currency: DEFAULT_CURRENCY,
-            product_data: { name: "Delivery Fee" },
-            unit_amount: d,
-          },
-          quantity: 1,
-        });
+    // delivery fee detection (try several fields on order)
+    const deliveryCandidates = ["deliveryFee", "delivery_fee", "delivery", "deliveryPrice", "deliveryPriceMNT"];
+    for (const key of deliveryCandidates) {
+      if (typeof order[key] !== "undefined" && order[key] !== null) {
+        const d = toCents(order[key]);
+        if (d !== null && d > 0) {
+          line_items.push({
+            price_data: {
+              currency: DEFAULT_CURRENCY,
+              product_data: { name: "Delivery Fee" },
+              unit_amount: d,
+            },
+            quantity: 1,
+          });
+        }
+        break;
       }
     }
 
     if (!line_items.length) {
-      return res.status(400).json({ error: "No items on order to create checkout session" });
+      return res.status(400).json({ error: "No valid line items could be constructed for Stripe checkout" });
     }
 
     // Create Stripe session
@@ -109,7 +167,7 @@ export async function createSession(req, res) {
       cancel_url: `${process.env.STRIPE_CANCEL_URL}?orderId=${encodeURIComponent(order.id)}`,
     });
 
-    // Create payment record (non-blocking)
+    // Create a payment record (best-effort)
     try {
       await prisma.payment.create({
         data: {
@@ -120,7 +178,7 @@ export async function createSession(req, res) {
         },
       });
     } catch (e) {
-      console.warn("createSession — payment record creation failed:", e?.message || e);
+      console.warn("createSession — payment creation failed:", e?.message || e);
     }
 
     return res.json({ url: session.url });
