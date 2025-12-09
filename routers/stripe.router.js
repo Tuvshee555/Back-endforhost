@@ -1,3 +1,4 @@
+// routers/stripe.router.js
 import { Router } from "express";
 import express from "express";
 import { createSession } from "../controller/stripe/create-session.js";
@@ -5,10 +6,10 @@ import { webhookHandler } from "../controller/stripe/webhook.js";
 
 const stripeRouter = Router();
 
-// Create Checkout Session
-stripeRouter.post("/create-session", createSession);
+// Parse JSON only for this route so req.body is available
+stripeRouter.post("/create-session", express.json(), createSession);
 
-// ⚠️ RAW BODY IS REQUIRED FOR WEBHOOK
+// Keep raw body for the webhook route (required by Stripe)
 stripeRouter.post(
   "/webhook",
   express.raw({ type: "application/json" }),
@@ -16,4 +17,3 @@ stripeRouter.post(
 );
 
 export default stripeRouter;
-    
