@@ -18,7 +18,6 @@ dotenv.config();
 const app = express();  
 const PORT = process.env.PORT || 4000;
 
-app.use("/stripe", stripeRouter);
 
 // CORS
 app.use(
@@ -48,6 +47,7 @@ app.use("/qpay", qpayRouter);
 app.use("/stats", statRouter);
 app.use("/cart", cartRouter);
 app.use("/email", emailRouter);
+app.use("/stripe", stripeRouter);
 
 
 
