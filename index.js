@@ -11,11 +11,14 @@ import { orderRouter } from "./routers/order.router.js";
 import { statRouter } from "./routers/stat.router.js";
 import { cartRouter } from "./routers/cart.router.js";
 import { emailRouter } from "./routers/email.routes.js";
+import stripeRouter from "./routers/stripe.router.js";
 
 dotenv.config();
 
-const app = express();
+const app = express();  
 const PORT = process.env.PORT || 4000;
+
+app.use("/stripe", stripeRouter);
 
 // CORS
 app.use(
