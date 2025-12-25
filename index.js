@@ -28,12 +28,20 @@ app.use(
       "https://food-delivery-customer.vercel.app",
       "https://food-delivery-admin-peach.vercel.app",
       "https://food-delivery-admin-z918.vercel.app",
-      "https://delivery-customer.shop"
+      "https://delivery-customer.shop",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+    ],
     credentials: true,
   })
 );
+
+// ✅ VERY IMPORTANT
+app.options("*", cors());
 
 app.use(express.json());
 
