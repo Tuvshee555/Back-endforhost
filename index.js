@@ -9,7 +9,6 @@ import { items } from "./routers/items.router.js";
 import { qpayRouter } from "./routers/qpay.router.js";
 import { orderRouter } from "./routers/order.router.js";
 import { statRouter } from "./routers/stat.router.js";
-import { cartRouter } from "./routers/cart.router.js";
 import { emailRouter } from "./routers/email.routes.js";
 import stripeRouter from "./routers/stripe.router.js";
 
@@ -53,7 +52,6 @@ app.use("/category", categoryRouter);
 app.use("/items", items);
 app.use("/qpay", qpayRouter);
 app.use("/stats", statRouter);
-app.use("/cart", cartRouter);
 app.use("/email", emailRouter);
 app.use("/stripe", stripeRouter);
 
