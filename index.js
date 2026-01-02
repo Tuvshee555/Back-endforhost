@@ -14,11 +14,9 @@ import stripeRouter from "./routers/stripe.router.js";
 
 dotenv.config();
 
-const app = express();  
+const app = express();
 const PORT = process.env.PORT || 4000;
 
-
-// CORS
 app.use(
   cors({
     origin: [
@@ -29,22 +27,17 @@ app.use(
       "https://food-delivery-admin-z918.vercel.app",
       "https://delivery-customer.shop",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-    ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// ✅ VERY IMPORTANT
 app.options("*", cors());
+app.use(express.json({ limit: "10mb" }));
 
-app.use(express.json());
+app.get("/", (_, res) => res.send("🚀 Backend Running"));
 
-// Routers
 app.use("/food", foodRouter);
 app.use("/order", orderRouter);
 app.use("/user", userRouter);
@@ -55,11 +48,11 @@ app.use("/stats", statRouter);
 app.use("/email", emailRouter);
 app.use("/stripe", stripeRouter);
 
+app.use((err, req, res, next) => {
+  console.error("GLOBAL ERROR:", err);
+  res.status(500).json({ message: "Internal server error" });
+});
 
-
-// Health check
-app.get("/", (req, res) => res.send("🚀 Backend Running"));
-
-// Start server
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
+app.listen(PORT, () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);

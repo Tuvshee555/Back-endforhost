@@ -9,12 +9,11 @@ import { requireAuth } from "../middleware/requireAuth.js";
 
 export const orderRouter = Router();
 
-orderRouter.post("/",requireAuth, createFoodOrder);
-orderRouter.delete("/", deleteFoodOrder);
+orderRouter.post("/", requireAuth, createFoodOrder);
+orderRouter.delete("/", requireAuth, deleteFoodOrder);
 
-// NEW CLEAN ROUTES
-orderRouter.get("/:id", getOrderById);         // GET order by ID
-orderRouter.get("/user/:userId", getOrdersByUser); // GET orders for user
+orderRouter.get("/user/:userId", requireAuth, getOrdersByUser);
+orderRouter.get("/:id", requireAuth, getOrderById);
 
-orderRouter.patch("/:id", updatedFoodOrder);
-orderRouter.get("/", getAllOrder);
+orderRouter.patch("/:id", requireAuth, updatedFoodOrder);
+orderRouter.get("/", requireAuth, getAllOrder);

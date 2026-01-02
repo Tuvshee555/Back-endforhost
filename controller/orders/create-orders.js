@@ -2,32 +2,22 @@ import { prisma } from "../../prismaClient.js";
 
 export const createFoodOrder = async (req, res) => {
   try {
-    const userId = req.user.id; // ✅ guaranteed
+    const userId = req.user?.id;
     const { totalPrice, items, location } = req.body;
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!location) {
-      return res.status(400).json({
-        success: false,
-        message: "Location is required",
-      });
+    if (!location || !totalPrice) {
+      return res.status(400).json({ message: "Missing fields" });
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Order items are required",
-      });
+      return res.status(400).json({ message: "Items required" });
     }
 
-    // 🔐 userId is trusted because it came from JWT
-    const newOrder = await prisma.foodOrder.create({
+    const order = await prisma.foodOrder.create({
       data: {
         userId,
         totalPrice,
@@ -40,19 +30,13 @@ export const createFoodOrder = async (req, res) => {
         },
       },
       include: {
-        user: true,
-        foodOrderItems: {
-          include: { food: true },
-        },
+        foodOrderItems: true,
       },
     });
 
-    return res.status(201).json(newOrder);
+    res.status(201).json(order);
   } catch (error) {
-    console.error("Error creating FoodOrder:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Error creating FoodOrder",
-    });
+    console.error("CREATE ORDER ERROR:", error);
+    res.status(500).json({ message: "Order creation failed" });
   }
 };
