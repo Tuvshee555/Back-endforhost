@@ -87,6 +87,7 @@ model FoodOrder {
   totalPrice     Float
   status         OrderStatus @default(PENDING)
   location       String?
+  notes          String? // ✅ ADD THIS
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @default(now()) @updatedAt
   user           User        @relation(fields: [userId], references: [id])
