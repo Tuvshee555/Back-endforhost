@@ -5,39 +5,43 @@ export const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (!id) {
+      return res.status(400).json({ message: "Order ID is required" });
+    }
+
     const order = await prisma.foodOrder.findUnique({
       where: { id },
       include: {
         foodOrderItems: {
-          include: { food: true },
-        },
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phonenumber: true,
-            city: true,
-            district: true,
-            khoroo: true,
-            address: true,
-            notes: true,
+          include: {
+            food: true,
           },
         },
       },
     });
 
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
 
-    // send location directly and include user details (so frontend has everything)
+    // ✅ Frontend-friendly, STRUCTURED response
     const formatted = {
       id: order.id,
+      status: order.status,
       totalPrice: order.totalPrice,
       createdAt: order.createdAt,
-      status: order.status,
-      location: order.location ?? "",
-      user: order.user ?? null,
+
+      delivery: {
+        firstName: order.firstName,
+        lastName: order.lastName,
+        phone: order.phone,
+        city: order.city,
+        district: order.district,
+        khoroo: order.khoroo,
+        address: order.address,
+        notes: order.notes,
+      },
+
       items: order.foodOrderItems.map((item) => ({
         id: item.id,
         quantity: item.quantity,
@@ -50,9 +54,9 @@ export const getOrderById = async (req, res) => {
       })),
     };
 
-    res.json(formatted);
-  } catch (err) {
-    console.error("❌ Error getOrderById:", err);
-    res.status(500).json({ error: "Failed to load order" });
+    return res.status(200).json(formatted);
+  } catch (error) {
+    console.error("GET ORDER BY ID ERROR:", error);
+    return res.status(500).json({ message: "Failed to load order" });
   }
 };

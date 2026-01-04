@@ -5,40 +5,65 @@ export const createFoodOrder = async (req, res) => {
   try {
     const userId = req.user?.id;
 
-    // destructure everything we expect from body (notes included)
+    // structured fields expected from frontend
     const {
       totalPrice,
       items,
-      location: bodyLocation,
+      firstName: bodyFirstName,
+      lastName: bodyLastName,
+      phone: bodyPhone,
+      city: bodyCity,
+      district: bodyDistrict,
+      khoroo: bodyKhoroo,
       address: bodyAddress,
       notes: bodyNotes,
     } = req.body;
 
-    // more verbose debugging: log full body + headers (safely)
+    // debug log
     console.log("CREATE ORDER REQUEST - userId:", userId);
     console.log("BODY:", {
       totalPrice,
       itemsLength: Array.isArray(items) ? items.length : 0,
-      location: bodyLocation,
+      firstName: bodyFirstName,
+      lastName: bodyLastName,
+      phone: bodyPhone,
+      city: bodyCity,
+      district: bodyDistrict,
+      khoroo: bodyKhoroo,
       address: bodyAddress,
       notes: bodyNotes,
     });
 
-    // Normalize location: prefer body.location, fallback to body.address (if frontend sends address)
-    const rawLocation = bodyLocation ?? bodyAddress ?? "";
-    const location =
-      typeof rawLocation === "string" ? rawLocation.trim() : String(rawLocation);
-
-    // Normalize notes (optional)
-    const notes =
-      typeof bodyNotes === "string" ? bodyNotes.trim() : bodyNotes ?? null;
-
+    // basic auth / payload validation
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    if (!location || typeof totalPrice === "undefined")
-      return res.status(400).json({ message: "Missing fields" });
+
+    if (typeof totalPrice === "undefined" || Number.isNaN(Number(totalPrice)))
+      return res.status(400).json({ message: "Missing or invalid totalPrice" });
+
     if (!Array.isArray(items) || items.length === 0)
       return res.status(400).json({ message: "Items required" });
 
+    // normalize incoming strings (trim) or set null
+    const safeString = (v) =>
+      typeof v === "string" && v.trim().length ? v.trim() : null;
+
+    const firstName = safeString(bodyFirstName);
+    const lastName = safeString(bodyLastName);
+    const phone = safeString(bodyPhone);
+    const city = safeString(bodyCity);
+    const district = safeString(bodyDistrict);
+    const khoroo = safeString(bodyKhoroo);
+    const address = safeString(bodyAddress);
+    const notes = safeString(bodyNotes);
+
+    // require at least some delivery info (address or city) to avoid empty orders
+    const hasDeliveryInfo = Boolean(address || city || district || khoroo || phone);
+    if (!hasDeliveryInfo)
+      return res
+        .status(400)
+        .json({ message: "Delivery information required (address/city/phone)" });
+
+    // normalize items: ensure foodId present and quantity is positive
     const normalizedItems = items
       .map((it) => ({
         foodId: typeof it.foodId === "string" ? it.foodId : null,
@@ -50,6 +75,7 @@ export const createFoodOrder = async (req, res) => {
       return res.status(400).json({ message: "No valid items provided" });
     }
 
+    // validate food ids exist
     const uniqueFoodIds = [...new Set(normalizedItems.map((i) => i.foodId))];
 
     const existingFoods = await prisma.food.findMany({
@@ -66,14 +92,23 @@ export const createFoodOrder = async (req, res) => {
       });
     }
 
-    // create order inside transaction (atomic)
+    // create order inside a transaction (atomic)
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.foodOrder.create({
         data: {
           userId,
           totalPrice: Number(totalPrice),
-          location,
+
+          // structured delivery fields
+          firstName,
+          lastName,
+          phone,
+          city,
+          district,
+          khoroo,
+          address,
           notes: notes ?? null,
+
           foodOrderItems: {
             create: normalizedItems.map((item) => ({
               foodId: item.foodId,
@@ -83,13 +118,20 @@ export const createFoodOrder = async (req, res) => {
         },
         include: { foodOrderItems: true },
       });
+
       return created;
     });
 
     console.log("ORDER CREATED:", {
       orderId: order.id,
       itemsCount: order.foodOrderItems.length,
-      location: order.location,
+      firstName: order.firstName,
+      lastName: order.lastName,
+      phone: order.phone,
+      city: order.city,
+      district: order.district,
+      khoroo: order.khoroo,
+      address: order.address,
       notes: order.notes ?? null,
     });
 
