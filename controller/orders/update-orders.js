@@ -1,11 +1,22 @@
 // controller/orders/update-orders.js
 import { prisma } from "../../prismaClient.js";
 
+const ALLOWED_TRANSITIONS = {
+  PENDING: ["WAITING_PAYMENT", "COD_PENDING", "CANCELLED"],
+  WAITING_PAYMENT: ["PAID", "CANCELLED"],
+  COD_PENDING: ["DELIVERING", "CANCELLED"],
+  PAID: ["DELIVERING"],
+  DELIVERING: ["DELIVERED"],
+  DELIVERED: [],
+  CANCELLED: [],
+};
+
 export const updatedFoodOrder = async (req, res) => {
   const { id } = req.params;
-  if (!id) return res.status(400).json({ success: false, message: "Order ID required" });
+  if (!id) {
+    return res.status(400).json({ message: "Order ID required" });
+  }
 
-  // Accept status and any delivery fields (only update provided keys)
   const {
     status,
     firstName,
@@ -18,19 +29,43 @@ export const updatedFoodOrder = async (req, res) => {
     notes,
   } = req.body;
 
-  const data = {};
-  if (status) data.status = status;
-  if (typeof firstName !== "undefined") data.firstName = firstName;
-  if (typeof lastName !== "undefined") data.lastName = lastName;
-  if (typeof phone !== "undefined") data.phone = phone;
-  if (typeof city !== "undefined") data.city = city;
-  if (typeof district !== "undefined") data.district = district;
-  if (typeof khoroo !== "undefined") data.khoroo = khoroo;
-  if (typeof address !== "undefined") data.address = address;
-  if (typeof notes !== "undefined") data.notes = notes;
-
   try {
-    const updatedOrder = await prisma.foodOrder.update({
+    const existing = await prisma.foodOrder.findUnique({
+      where: { id },
+      include: {
+        foodOrderItems: { include: { food: true } },
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // 🔒 STATUS TRANSITION GUARD
+    if (status) {
+      const allowed = ALLOWED_TRANSITIONS[existing.status] || [];
+      if (!allowed.includes(status)) {
+        return res.status(400).json({
+          message: `Invalid status transition: ${existing.status} → ${status}`,
+        });
+      }
+    }
+
+    const safe = (v) =>
+      typeof v === "string" && v.trim().length ? v.trim() : null;
+
+    const data = {};
+    if (status) data.status = status;
+    if (firstName !== undefined) data.firstName = safe(firstName);
+    if (lastName !== undefined) data.lastName = safe(lastName);
+    if (phone !== undefined) data.phone = safe(phone);
+    if (city !== undefined) data.city = safe(city);
+    if (district !== undefined) data.district = safe(district);
+    if (khoroo !== undefined) data.khoroo = safe(khoroo);
+    if (address !== undefined) data.address = safe(address);
+    if (notes !== undefined) data.notes = safe(notes);
+
+    const updated = await prisma.foodOrder.update({
       where: { id },
       data,
       include: {
@@ -38,24 +73,25 @@ export const updatedFoodOrder = async (req, res) => {
       },
     });
 
-    // Return structured shape similar to getOrderById
-    const formatted = {
-      id: updatedOrder.id,
-      status: updatedOrder.status,
-      totalPrice: updatedOrder.totalPrice,
-      createdAt: updatedOrder.createdAt,
-      updatedAt: updatedOrder.updatedAt,
+    return res.status(200).json({
+      id: updated.id,
+      orderNumber: updated.orderNumber,
+      status: updated.status,
+      paymentMethod: updated.paymentMethod,
+      totalPrice: updated.totalPrice,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
       delivery: {
-        firstName: updatedOrder.firstName,
-        lastName: updatedOrder.lastName,
-        phone: updatedOrder.phone,
-        city: updatedOrder.city,
-        district: updatedOrder.district,
-        khoroo: updatedOrder.khoroo,
-        address: updatedOrder.address,
-        notes: updatedOrder.notes,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        phone: updated.phone,
+        city: updated.city,
+        district: updated.district,
+        khoroo: updated.khoroo,
+        address: updated.address,
+        notes: updated.notes,
       },
-      items: updatedOrder.foodOrderItems.map((it) => ({
+      items: updated.foodOrderItems.map((it) => ({
         id: it.id,
         quantity: it.quantity,
         food: {
@@ -65,14 +101,9 @@ export const updatedFoodOrder = async (req, res) => {
           image: it.food.image,
         },
       })),
-    };
-
-    return res.status(200).json(formatted);
+    });
   } catch (error) {
-    console.error("Error while updating food order:", error);
-    if (error.code === "P2025") {
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
-    return res.status(500).json({ success: false, message: "Error while updating food order" });
+    console.error("UPDATE ORDER ERROR:", error);
+    return res.status(500).json({ message: "Failed to update order" });
   }
 };

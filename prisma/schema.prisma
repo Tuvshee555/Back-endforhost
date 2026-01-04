@@ -82,10 +82,12 @@ model Category {
 }
 
 model FoodOrder {
-  id         String      @id @default(uuid())
-  userId     String
-  totalPrice Float
-  status     OrderStatus @default(PENDING)
+  id            String        @id @default(uuid())
+  orderNumber   String        @unique
+  userId        String
+  totalPrice    Float
+  status        OrderStatus
+  paymentMethod PaymentMethod
 
   firstName String?
   lastName  String?
@@ -128,6 +130,16 @@ enum PaymentStatus {
 
 enum OrderStatus {
   PENDING
-  CANCELLED
+  WAITING_PAYMENT
+  COD_PENDING
+  PAID
+  DELIVERING
   DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  BANK
+  QPAY
 }

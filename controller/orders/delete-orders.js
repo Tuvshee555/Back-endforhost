@@ -2,22 +2,42 @@
 import { prisma } from "../../prismaClient.js";
 
 export const deleteFoodOrder = async (req, res) => {
-  const { id } = req.body; // current route uses body; consider switching to DELETE /:id
+  const { id } = req.body;
 
   if (!id) {
-    return res.status(400).json({ success: false, message: "Order ID is required" });
+    return res.status(400).json({ message: "Order ID is required" });
   }
 
   try {
-    // Delete order items first, then order in a transaction
+    // 🔒 ADMIN ONLY
+    if (req.user?.role !== "ADMIN") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const order = await prisma.foodOrder.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // 🔒 NEVER DELETE IMPORTANT ORDERS
+    if (["PAID", "DELIVERING", "DELIVERED"].includes(order.status)) {
+      return res.status(400).json({
+        message: "Cannot delete paid or delivered orders. Cancel instead.",
+      });
+    }
+
     await prisma.$transaction([
       prisma.orderItem.deleteMany({ where: { orderId: id } }),
       prisma.foodOrder.delete({ where: { id } }),
     ]);
 
-    return res.status(200).json({ success: true, message: "Successfully deleted food order" });
+    return res.status(200).json({ message: "Order deleted successfully" });
   } catch (error) {
-    console.error("Error deleting food order:", error);
-    return res.status(500).json({ success: false, message: "Error deleting food order" });
+    console.error("DELETE ORDER ERROR:", error);
+    return res.status(500).json({ message: "Failed to delete order" });
   }
 };

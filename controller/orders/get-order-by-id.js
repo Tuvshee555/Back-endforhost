@@ -24,12 +24,14 @@ export const getOrderById = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // ✅ Frontend-friendly, STRUCTURED response
-    const formatted = {
+    return res.status(200).json({
       id: order.id,
+      orderNumber: order.orderNumber,          // ✅ ADDED
       status: order.status,
+      paymentMethod: order.paymentMethod,      // ✅ ADDED
       totalPrice: order.totalPrice,
       createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
 
       delivery: {
         firstName: order.firstName,
@@ -52,9 +54,7 @@ export const getOrderById = async (req, res) => {
           image: item.food.image,
         },
       })),
-    };
-
-    return res.status(200).json(formatted);
+    });
   } catch (error) {
     console.error("GET ORDER BY ID ERROR:", error);
     return res.status(500).json({ message: "Failed to load order" });

@@ -3,29 +3,49 @@ import { prisma } from "../../prismaClient.js";
 
 export const getAllOrder = async (req, res) => {
   try {
+    // 🔐 Any authenticated user (as requested)
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const orders = await prisma.foodOrder.findMany({
+      orderBy: { createdAt: "desc" },
       include: {
         user: {
-          select: { id: true, email: true }, // minimal user info
+          select: {
+            id: true,
+            email: true,
+            address: true,
+          },
         },
+
         foodOrderItems: {
           include: {
-            food: true,
+            food: {
+              select: {
+                id: true,
+                foodName: true,
+                image: true,
+                price: true,
+                categoryId: true,
+              },
+            },
           },
         },
       },
-      orderBy: { createdAt: "desc" },
     });
 
-    // Return frontend-friendly structured array
-    const formatted = orders.map((order) => ({
-      id: order.id,
-      status: order.status,
-      totalPrice: order.totalPrice,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-      user: order.user ? { id: order.user.id, email: order.user.email } : null,
-      delivery: {
+    return res.status(200).json(
+      orders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        totalPrice: order.totalPrice,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+
+        // delivery info
         firstName: order.firstName,
         lastName: order.lastName,
         phone: order.phone,
@@ -34,22 +54,34 @@ export const getAllOrder = async (req, res) => {
         khoroo: order.khoroo,
         address: order.address,
         notes: order.notes,
-      },
-      items: order.foodOrderItems.map((it) => ({
-        id: it.id,
-        quantity: it.quantity,
-        food: {
-          id: it.food.id,
-          foodName: it.food.foodName,
-          price: it.food.price,
-          image: it.food.image,
-        },
-      })),
-    }));
 
-    return res.status(200).json(formatted);
+        user: order.user
+          ? {
+              id: order.user.id,
+              email: order.user.email,
+              address: order.user.address,
+            }
+          : null,
+
+        foodOrderItems: order.foodOrderItems.map((item) => ({
+          id: item.id,
+          quantity: item.quantity,
+          food: item.food
+            ? {
+                id: item.food.id,
+                foodName: item.food.foodName,
+                image: item.food.image,
+                price: item.food.price,
+                categoryId: item.food.categoryId,
+              }
+            : null,
+        })),
+
+        itemsCount: order.foodOrderItems.length,
+      }))
+    );
   } catch (error) {
-    console.error("Error while getting food orders:", error);
-    return res.status(500).json({ message: `Error while getting food orders: ${error.message}` });
+    console.error("GET ALL ORDERS ERROR:", error);
+    return res.status(500).json({ message: "Failed to fetch orders" });
   }
 };
