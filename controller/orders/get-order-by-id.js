@@ -24,11 +24,25 @@ export const getOrderById = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
+    // 🔑 Get latest payment (for QPay QR re-display)
+    const payment = await prisma.payment.findFirst({
+      where: { orderId: id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        invoiceId: true,
+        amount: true,
+        status: true,
+        qrText: true,
+        qrImage: true,
+        createdAt: true,
+      },
+    });
+
     return res.status(200).json({
       id: order.id,
-      orderNumber: order.orderNumber,          // ✅ ADDED
+      orderNumber: order.orderNumber,
       status: order.status,
-      paymentMethod: order.paymentMethod,      // ✅ ADDED
+      paymentMethod: order.paymentMethod,
       totalPrice: order.totalPrice,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
@@ -54,6 +68,9 @@ export const getOrderById = async (req, res) => {
           image: item.food.image,
         },
       })),
+
+      // 👇 THIS IS THE IMPORTANT PART
+      payment: payment || null,
     });
   } catch (error) {
     console.error("GET ORDER BY ID ERROR:", error);

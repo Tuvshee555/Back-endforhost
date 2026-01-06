@@ -11,6 +11,7 @@ import { orderRouter } from "./routers/order.router.js";
 import { statRouter } from "./routers/stat.router.js";
 import { emailRouter } from "./routers/email.routes.js";
 import stripeRouter from "./routers/stripe.router.js";
+import { expireUnpaidOrders } from "./jobs/expireOrders.js";
 
 dotenv.config();
 
@@ -53,6 +54,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Internal server error" });
 });
 
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// ⏳ Expire unpaid QPay orders every 5 minutes
+setInterval(expireUnpaidOrders, 5 * 60 * 1000);

@@ -1,7 +1,12 @@
-// Load .env first
-import 'dotenv/config';
-import { PrismaClient } from '@prisma/client/edge';
-import { withAccelerate } from '@prisma/extension-accelerate';
+import { PrismaClient } from "@prisma/client";
 
-// Export prisma client
-export const prisma = new PrismaClient().$extends(withAccelerate());
+export const prisma = new PrismaClient();
+
+
+// // Load .env first
+// import 'dotenv/config';
+// import { PrismaClient } from '@prisma/client/edge';
+// import { withAccelerate } from '@prisma/extension-accelerate';
+
+// // Export prisma client
+// export const prisma = new PrismaClient().$extends(withAccelerate());
