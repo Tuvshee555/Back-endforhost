@@ -9,9 +9,10 @@ import { getFoodById } from "../controller/foods/get-food-by-id.js";
 export const foodRouter = Router();
 
 foodRouter.post("/", createFood);
-foodRouter.delete("/:id", deleteFood);
 foodRouter.get("/", getFood);
 foodRouter.put("/:id", updateFood);
-foodRouter.delete("/", deleteAllFoods);
 foodRouter.get("/:id", getFoodById); 
 
+
+foodRouter.delete("/", deleteAllFoods);
+foodRouter.delete("/:id", deleteFood);
