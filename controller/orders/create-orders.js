@@ -8,8 +8,7 @@ export const createFoodOrder = async (req, res) => {
 
     const {
       totalPrice,
-      items,
-      paymentMethod, // ✅ REQUIRED
+      paymentMethod,
       firstName,
       lastName,
       phone,
@@ -19,6 +18,9 @@ export const createFoodOrder = async (req, res) => {
       address,
       notes,
     } = req.body;
+
+    // accept both payload shapes
+    const items = req.body.items ?? req.body.normalizedItems;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -62,7 +64,6 @@ export const createFoodOrder = async (req, res) => {
         .json({ message: "Some foods no longer exist" });
     }
 
-    // ✅ BACKEND DECIDES STATUS
     const status =
       paymentMethod === "COD" ? "COD_PENDING" : "WAITING_PAYMENT";
 
