@@ -52,7 +52,7 @@ export const facebookAuth = async (req, res) => {
     role: user.role
   },
   process.env.JWT_SECRET,
-  { expiresIn: "7d" }
+  { expiresIn: "21d" }
 );
 
     // 🧠 STEP 5: Send response to frontend
