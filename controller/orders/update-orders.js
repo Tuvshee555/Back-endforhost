@@ -1,5 +1,9 @@
 // controller/orders/update-orders.js
 import { prisma } from "../../prismaClient.js";
+import {
+  sendTelegramMessage,
+  formatOrderStatusMessage,
+} from "../../utils/telegram.js";
 
 const ALLOWED_TRANSITIONS = {
   PENDING: ["WAITING_PAYMENT", "COD_PENDING", "CANCELLED"],
@@ -72,6 +76,18 @@ export const updatedFoodOrder = async (req, res) => {
         foodOrderItems: { include: { food: true } },
       },
     });
+
+    // ✅ TELEGRAM STATUS NOTIFY (smart, no spam)
+    const oldStatus = existing.status;
+    const newStatus = updated.status;
+
+    const IMPORTANT = new Set(["PAID", "CANCELLED", "DELIVERED", "DELIVERING"]);
+
+    if (status && oldStatus !== newStatus && IMPORTANT.has(newStatus)) {
+      sendTelegramMessage(
+        formatOrderStatusMessage(updated, oldStatus, newStatus)
+      );
+    }
 
     return res.status(200).json({
       id: updated.id,

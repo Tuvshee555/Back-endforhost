@@ -1,6 +1,7 @@
 // controller/orders/create-orders.js
 import { prisma } from "../../prismaClient.js";
 import { generateOrderNumber } from "../../utils/generateOrderNumber.js";
+import { sendTelegramMessage, formatOrderMessage } from "../../utils/telegram.js";
 
 export const createFoodOrder = async (req, res) => {
   try {
@@ -19,12 +20,9 @@ export const createFoodOrder = async (req, res) => {
       notes,
     } = req.body;
 
-    // accept both payload shapes
     const items = req.body.items ?? req.body.normalizedItems;
 
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     if (!paymentMethod || !["COD", "BANK", "QPAY"].includes(paymentMethod)) {
       return res.status(400).json({ message: "Invalid payment method" });
@@ -96,6 +94,9 @@ export const createFoodOrder = async (req, res) => {
         },
       },
     });
+
+    // ✅ TELEGRAM NOTIFICATION
+    sendTelegramMessage(formatOrderMessage(order));
 
     return res.status(201).json({
       orderId: order.id,
