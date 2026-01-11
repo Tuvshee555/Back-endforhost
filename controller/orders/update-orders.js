@@ -5,6 +5,9 @@ import {
   formatOrderStatusMessage,
 } from "../../utils/telegram.js";
 
+import { sendEmail } from "../../utils/sendEmail.js";
+import { orderStatusChangedEmail } from "../../utils/emailTemplates.js";
+
 const ALLOWED_TRANSITIONS = {
   PENDING: ["WAITING_PAYMENT", "COD_PENDING", "CANCELLED"],
   WAITING_PAYMENT: ["PAID", "CANCELLED"],
@@ -17,9 +20,7 @@ const ALLOWED_TRANSITIONS = {
 
 export const updatedFoodOrder = async (req, res) => {
   const { id } = req.params;
-  if (!id) {
-    return res.status(400).json({ message: "Order ID required" });
-  }
+  if (!id) return res.status(400).json({ message: "Order ID required" });
 
   const {
     status,
@@ -41,11 +42,9 @@ export const updatedFoodOrder = async (req, res) => {
       },
     });
 
-    if (!existing) {
-      return res.status(404).json({ message: "Order not found" });
-    }
+    if (!existing) return res.status(404).json({ message: "Order not found" });
 
-    // 🔒 STATUS TRANSITION GUARD
+    // 🔒 Status transition guard
     if (status) {
       const allowed = ALLOWED_TRANSITIONS[existing.status] || [];
       if (!allowed.includes(status)) {
@@ -77,16 +76,47 @@ export const updatedFoodOrder = async (req, res) => {
       },
     });
 
-    // ✅ TELEGRAM STATUS NOTIFY (smart, no spam)
     const oldStatus = existing.status;
     const newStatus = updated.status;
 
     const IMPORTANT = new Set(["PAID", "CANCELLED", "DELIVERED", "DELIVERING"]);
 
+    // ✅ Telegram notify
     if (status && oldStatus !== newStatus && IMPORTANT.has(newStatus)) {
-      sendTelegramMessage(
-        formatOrderStatusMessage(updated, oldStatus, newStatus)
-      );
+      try {
+        await sendTelegramMessage(
+          formatOrderStatusMessage(updated, oldStatus, newStatus)
+        );
+      } catch (tgErr) {
+        console.error("❌ Telegram status notify failed:", tgErr);
+      }
+    }
+
+    // ✅ Customer email notify (only for these)
+    const EMAIL_STATUSES = new Set(["DELIVERING", "DELIVERED", "CANCELLED"]);
+
+    if (status && oldStatus !== newStatus && EMAIL_STATUSES.has(newStatus)) {
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: updated.userId },
+          select: { email: true },
+        });
+
+        if (user?.email) {
+          await sendEmail({
+            to: user.email,
+            subject:
+              newStatus === "DELIVERING"
+                ? `🚚 Захиалга замдаа явж байна #${updated.orderNumber}`
+                : newStatus === "DELIVERED"
+                ? `🏁 Захиалга хүргэгдлээ #${updated.orderNumber}`
+                : `❌ Захиалга цуцлагдлаа #${updated.orderNumber}`,
+            html: orderStatusChangedEmail(updated, oldStatus, newStatus),
+          });
+        }
+      } catch (mailErr) {
+        console.error("❌ Customer status email failed:", mailErr);
+      }
     }
 
     return res.status(200).json({
