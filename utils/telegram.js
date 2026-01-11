@@ -33,24 +33,30 @@ export function formatOrderMessage(order) {
   const items =
     order.foodOrderItems?.length > 0
       ? order.foodOrderItems
-          .map((it) => `- ${it.food?.foodName ?? "Food"} x${it.quantity}`)
+          .map((it) => `- ${it.food?.foodName ?? "Хоол"} x${it.quantity ?? 1}`)
           .join("\n")
-      : "- (no items)";
+      : "- (Бараа алга)";
+
+  const address =
+    `${order.city ?? ""} ${order.district ?? ""} ${order.khoroo ?? ""} ${
+      order.address ?? ""
+    }`.trim() || "-";
 
   return (
-    `🛒 NEW ORDER!\n\n` +
-    `🧾 Order: #${order.orderNumber}\n` +
-    `💰 Total: ${Number(order.totalPrice).toLocaleString()}₮\n` +
-    `💳 Payment: ${order.paymentMethod}\n` +
-    `📌 Status: ${order.status}\n\n` +
-    `👤 Name: ${customer || "-"}\n` +
-    `📞 Phone: ${order.phone || "-"}\n` +
-    `📍 Address: ${order.city || ""} ${order.district || ""} ${order.khoroo || ""} ${order.address || ""}`.trim() +
-    `\n` +
-    (order.notes ? `📝 Notes: ${order.notes}\n` : "") +
-    `\n🍔 Items:\n${items}`
+    `🛒 ШИНЭ ЗАХИАЛГА!\n\n` +
+    `🧾 Захиалгын дугаар: #${order.orderNumber}\n` +
+    `💰 Нийт дүн: ${Number(order.totalPrice).toLocaleString()}₮\n` +
+    `💳 Төлбөр: ${order.paymentMethod || "-"}\n` +
+    `📌 Статус: ${order.status || "-"}\n\n` +
+    `👤 Нэр: ${customer || "-"}\n` +
+    `📧 И-мэйл: ${order.email || "-"}\n` +
+    `📞 Утас: ${order.phone || "-"}\n` +
+    `📍 Хаяг: ${address}\n` +
+    (order.notes ? `📝 Тэмдэглэл: ${order.notes}\n` : "") +
+    `\n🍔 Захиалсан хоол:\n${items}`
   );
 }
+
 export function formatOrderStatusMessage(order, oldStatus, newStatus) {
   const emoji =
     newStatus === "PAID"
@@ -66,12 +72,13 @@ export function formatOrderStatusMessage(order, oldStatus, newStatus) {
   const customer = `${order.firstName ?? ""} ${order.lastName ?? ""}`.trim();
 
   return (
-    `${emoji} ORDER STATUS UPDATED\n\n` +
-    `🧾 Order: #${order.orderNumber}\n` +
-    `💰 Total: ${Number(order.totalPrice).toLocaleString()}₮\n` +
-    `💳 Payment: ${order.paymentMethod}\n\n` +
-    `📌 ${oldStatus} → ${newStatus}\n` +
-    `👤 ${customer || "-"}\n` +
-    `📞 ${order.phone || "-"}`
+    `${emoji} ЗАХИАЛГЫН СТАТУС ШИНЭЧЛЭГДЛЭЭ\n\n` +
+    `🧾 Захиалгын дугаар: #${order.orderNumber}\n` +
+    `💰 Нийт дүн: ${Number(order.totalPrice).toLocaleString()}₮\n` +
+    `💳 Төлбөр: ${order.paymentMethod || "-"}\n\n` +
+    `📌 ${oldStatus} → ${newStatus}\n\n` +
+    `👤 Нэр: ${customer || "-"}\n` +
+    `📧 И-мэйл: ${order.email || "-"}\n` +
+    `📞 Утас: ${order.phone || "-"}`
   );
 }
