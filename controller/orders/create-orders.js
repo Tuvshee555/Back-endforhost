@@ -3,6 +3,9 @@ import { prisma } from "../../prismaClient.js";
 import { generateOrderNumber } from "../../utils/generateOrderNumber.js";
 import { sendTelegramMessage, formatOrderMessage } from "../../utils/telegram.js";
 
+import { sendEmail } from "../../utils/sendEmail.js";
+import { orderCreatedEmail } from "../../utils/emailTemplates.js";
+
 export const createFoodOrder = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -57,14 +60,10 @@ export const createFoodOrder = async (req, res) => {
     });
 
     if (foods.length !== foodIds.length) {
-      return res
-        .status(400)
-        .json({ message: "Some foods no longer exist" });
+      return res.status(400).json({ message: "Some foods no longer exist" });
     }
 
-    const status =
-      paymentMethod === "COD" ? "COD_PENDING" : "WAITING_PAYMENT";
-
+    const status = paymentMethod === "COD" ? "COD_PENDING" : "WAITING_PAYMENT";
     const orderNumber = generateOrderNumber();
 
     const order = await prisma.foodOrder.create({
@@ -89,14 +88,34 @@ export const createFoodOrder = async (req, res) => {
         },
       },
       include: {
-        foodOrderItems: {
-          include: { food: true },
-        },
+        foodOrderItems: { include: { food: true } },
       },
     });
 
-    // ✅ TELEGRAM NOTIFICATION
-    sendTelegramMessage(formatOrderMessage(order));
+    // ✅ ADMIN TELEGRAM
+    try {
+      await sendTelegramMessage(formatOrderMessage(order));
+    } catch (tgErr) {
+      console.error("❌ Telegram order notify failed:", tgErr);
+    }
+
+    // ✅ CUSTOMER EMAIL
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+
+      if (user?.email) {
+        await sendEmail({
+          to: user.email,
+          subject: `Order received #${order.orderNumber}`,
+          html: orderCreatedEmail(order),
+        });
+      }
+    } catch (mailErr) {
+      console.error("❌ Customer email failed:", mailErr);
+    }
 
     return res.status(201).json({
       orderId: order.id,
