@@ -1,8 +1,8 @@
 // controller/orders/create-orders.js
 import { prisma } from "../../prismaClient.js";
 import { generateOrderNumber } from "../../utils/generateOrderNumber.js";
-import { sendTelegramMessage, formatOrderMessage } from "../../utils/telegram.js";
 
+import { sendTelegramMessage, formatOrderMessage } from "../../utils/telegram.js";
 import { sendEmail } from "../../utils/sendEmail.js";
 import { orderCreatedEmail } from "../../utils/emailTemplates.js";
 
@@ -21,6 +21,7 @@ export const createFoodOrder = async (req, res) => {
       khoroo,
       address,
       notes,
+      idempotencyKey, // ✅ from frontend (prevents double order if you add backend logic later)
     } = req.body;
 
     const items = req.body.items ?? req.body.normalizedItems;
@@ -42,6 +43,7 @@ export const createFoodOrder = async (req, res) => {
     const safe = (v) =>
       typeof v === "string" && v.trim().length ? v.trim() : null;
 
+    // ✅ normalize items
     const normalizedItems = items
       .map((i) => ({
         foodId: typeof i.foodId === "string" ? i.foodId : null,
@@ -53,6 +55,7 @@ export const createFoodOrder = async (req, res) => {
       return res.status(400).json({ message: "No valid items" });
     }
 
+    // ✅ validate food ids exist (minimal select)
     const foodIds = [...new Set(normalizedItems.map((i) => i.foodId))];
     const foods = await prisma.food.findMany({
       where: { id: { in: foodIds } },
@@ -63,9 +66,12 @@ export const createFoodOrder = async (req, res) => {
       return res.status(400).json({ message: "Some foods no longer exist" });
     }
 
-    const status = paymentMethod === "COD" ? "COD_PENDING" : "WAITING_PAYMENT";
+    const status =
+      paymentMethod === "COD" ? "COD_PENDING" : "WAITING_PAYMENT";
+
     const orderNumber = generateOrderNumber();
 
+    // ✅ FAST create: NO include here (big perf gain)
     const order = await prisma.foodOrder.create({
       data: {
         userId,
@@ -87,42 +93,57 @@ export const createFoodOrder = async (req, res) => {
           create: normalizedItems,
         },
       },
-      include: {
-        foodOrderItems: { include: { food: true } },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        paymentMethod: true,
+        totalPrice: true,
+        userId: true,
       },
     });
 
-    // ✅ ADMIN TELEGRAM
-    try {
-      await sendTelegramMessage(formatOrderMessage(order));
-    } catch (tgErr) {
-      console.error("❌ Telegram order notify failed:", tgErr);
-    }
-
-    // ✅ CUSTOMER EMAIL
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true },
-      });
-
-      if (user?.email) {
-        await sendEmail({
-          to: user.email,
-          subject: `Order received #${order.orderNumber}`,
-          html: orderCreatedEmail(order),
-        });
-      }
-    } catch (mailErr) {
-      console.error("❌ Customer email failed:", mailErr);
-    }
-
-    return res.status(201).json({
+    // ✅ RESPOND IMMEDIATELY (user sees fast checkout)
+    res.status(201).json({
       orderId: order.id,
       orderNumber: order.orderNumber,
       status: order.status,
       paymentMethod: order.paymentMethod,
       totalPrice: order.totalPrice,
+    });
+
+    // --------------------------------------------
+    // ✅ BACKGROUND WORK (DO NOT BLOCK RESPONSE)
+    // --------------------------------------------
+    setImmediate(async () => {
+      try {
+        const fullOrder = await prisma.foodOrder.findUnique({
+          where: { id: order.id },
+          include: {
+            user: { select: { email: true } },
+            foodOrderItems: {
+              include: { food: true },
+            },
+          },
+        });
+
+        if (!fullOrder) return;
+
+        // ✅ Telegram (no await blocking request)
+        sendTelegramMessage(formatOrderMessage(fullOrder)).catch(() => {});
+
+        // ✅ Email customer if exists
+        const customerEmail = fullOrder.user?.email;
+        if (customerEmail) {
+          sendEmail({
+            to: customerEmail,
+            subject: `✅ Захиалга хүлээн авлаа #${fullOrder.orderNumber}`,
+            html: orderCreatedEmail(fullOrder),
+          }).catch(() => {});
+        }
+      } catch (bgErr) {
+        console.error("❌ Background notify failed:", bgErr);
+      }
     });
   } catch (err) {
     console.error("CREATE ORDER ERROR:", err);
