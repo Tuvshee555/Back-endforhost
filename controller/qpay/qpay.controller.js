@@ -1,11 +1,11 @@
 import axios from "axios";
 import { prisma } from "../../prismaClient.js";
+import { sendTelegramMessage, formatOrderStatusMessage } from "../../utils/telegram.js";
 
 const QPAY_BASE_URL = process.env.QPAY_BASE_URL;
 let cachedToken = null;
 let tokenExpiry = null;
 
-// ✅ Get Access Token (QPay)
 export async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiry) {
     return cachedToken;
@@ -33,15 +33,11 @@ export async function getAccessToken() {
     console.log("✅ New QPay token backend");
     return cachedToken;
   } catch (err) {
-    console.error(
-      "❌ Failed to get QPay token:",
-      err.response?.data || err.message
-    );
+    console.error("❌ Failed to get QPay token:", err.response?.data || err.message);
     throw err;
   }
 }
 
-// ✅ Create invoice
 export const createInvoice = async (req, res) => {
   try {
     const { orderId, amount } = req.body;
@@ -50,7 +46,6 @@ export const createInvoice = async (req, res) => {
       return res.status(400).json({ error: "Invalid orderId or amount" });
     }
 
-    // Remove existing payments for safety
     await prisma.payment.deleteMany({ where: { orderId } });
 
     const token = await getAccessToken();
@@ -93,15 +88,11 @@ export const createInvoice = async (req, res) => {
 
     return res.json({ qr_text, qr_image, invoice_id });
   } catch (err) {
-    console.error(
-      "❌ Create invoice error:",
-      err.response?.data || err.message
-    );
+    console.error("❌ Create invoice error:", err.response?.data || err.message);
     return res.status(500).json({ error: "Create invoice failed" });
   }
 };
 
-// ✅ Manual payment check
 export const checkPayment = async (req, res) => {
   try {
     const { invoiceId } = req.body;
@@ -117,72 +108,128 @@ export const checkPayment = async (req, res) => {
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    const paid = statusRes.data.paid_amount > 0;
+    const paid = Number(statusRes.data?.paid_amount || 0) > 0;
 
     if (paid) {
-      const payment = await prisma.payment.updateMany({
+      const paymentsUpdated = await prisma.payment.updateMany({
         where: { invoiceId, status: "PENDING" },
         data: { status: "PAID" },
       });
 
-      const record = await prisma.payment.findFirst({
+      console.log("✅ paymentsUpdated.count =", paymentsUpdated.count);
+
+      const record = await prisma.payment.findUnique({
         where: { invoiceId },
       });
 
+      console.log("📌 payment record:", record);
+
       if (record?.orderId) {
-        await prisma.foodOrder.updateMany({
-          where: {
-            id: record.orderId,
-            status: "WAITING_PAYMENT",
-          },
-          data: { status: "PAID" },
+        // fetch order BEFORE update to know previous status
+        const beforeOrder = await prisma.foodOrder.findUnique({
+          where: { id: record.orderId },
         });
+
+        try {
+          const updatedOrder = await prisma.foodOrder.update({
+            where: { id: record.orderId },
+            data: { status: "PAID" },
+          });
+
+          console.log("✅ Order updated (checkPayment):", updatedOrder.id);
+
+          // send telegram only if this is a new transition to PAID
+          if (beforeOrder?.status !== "PAID") {
+            try {
+              await sendTelegramMessage(
+                formatOrderStatusMessage(
+                  updatedOrder,
+                  beforeOrder?.status || "WAITING_PAYMENT",
+                  "PAID"
+                )
+              );
+            } catch (tgErr) {
+              console.error("❌ Telegram send error (checkPayment):", tgErr);
+            }
+          }
+        } catch (err) {
+          console.error("❌ Failed to update order (checkPayment):", err.message);
+        }
       }
     }
 
     return res.json({ paid });
   } catch (err) {
-    console.error(
-      "❌ Check payment error:",
-      err.response?.data || err.message
-    );
+    console.error("❌ Check payment error:", err.response?.data || err.message);
     return res.status(500).json({ error: "Check payment failed" });
   }
 };
 
-// ✅ Webhook (authoritative)
 export const webhook = async (req, res) => {
   try {
+    console.log("🔥 QPay webhook received:", req.body);
+
     const { invoice_id, paid_amount, status } = req.body;
 
-    if (paid_amount > 0 || status === "PAID") {
-      await prisma.payment.updateMany({
-        where: { invoiceId: invoice_id, status: "PENDING" },
-        data: { status: "PAID" },
+    if (!invoice_id) {
+      return res.status(400).json({ error: "Missing invoice_id" });
+    }
+
+    const isPaid = Number(paid_amount || 0) > 0 || status === "PAID";
+
+    if (!isPaid) {
+      return res.json({ received: true });
+    }
+
+    const paymentsUpdated = await prisma.payment.updateMany({
+      where: { invoiceId: invoice_id, status: "PENDING" },
+      data: { status: "PAID" },
+    });
+
+    console.log("✅ paymentsUpdated.count =", paymentsUpdated.count);
+
+    const payment = await prisma.payment.findUnique({
+      where: { invoiceId: invoice_id },
+    });
+
+    console.log("📌 payment record:", payment);
+
+    if (payment?.orderId) {
+      // fetch order BEFORE update to know previous status
+      const beforeOrder = await prisma.foodOrder.findUnique({
+        where: { id: payment.orderId },
       });
 
-      const payment = await prisma.payment.findFirst({
-        where: { invoiceId: invoice_id },
-      });
-
-      if (payment?.orderId) {
-        await prisma.foodOrder.updateMany({
-          where: {
-            id: payment.orderId,
-            status: "WAITING_PAYMENT",
-          },
+      try {
+        const updatedOrder = await prisma.foodOrder.update({
+          where: { id: payment.orderId },
           data: { status: "PAID" },
         });
 
-        console.log(
-          `✅ Order ${payment.orderId} marked PAID via QPay webhook`
-        );
+        console.log(`✅ Order ${updatedOrder.id} marked PAID via QPay webhook`);
+
+        // send telegram only if transition is new
+        if (beforeOrder?.status !== "PAID") {
+          try {
+            await sendTelegramMessage(
+              formatOrderStatusMessage(
+                updatedOrder,
+                beforeOrder?.status || "WAITING_PAYMENT",
+                "PAID"
+              )
+            );
+          } catch (tgErr) {
+            console.error("❌ Telegram send error (webhook):", tgErr);
+          }
+        }
+      } catch (err) {
+        console.error("❌ Failed to update order (webhook):", err.message);
       }
     }
 
     return res.json({ received: true });
   } catch (err) {
-    console.error("❌ Webhook error:", err.message);
+    console.error("❌ Webhook error:", err.response?.data || err.message);
     return res.status(500).json({ error: "Webhook failed" });
   }
 };

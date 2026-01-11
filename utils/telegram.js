@@ -78,7 +78,7 @@ export function formatOrderStatusMessage(order, oldStatus, newStatus) {
     `💳 Төлбөр: ${order.paymentMethod || "-"}\n\n` +
     `📌 ${oldStatus} → ${newStatus}\n\n` +
     `👤 Нэр: ${customer || "-"}\n` +
-    `📧 И-мэйл: ${order.email || "-"}\n` +
+    // `📧 И-мэйл: ${order.email || "-"}\n` +
     `📞 Утас: ${order.phone || "-"}`
   );
 }
