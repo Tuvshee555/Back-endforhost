@@ -27,12 +27,14 @@ router.post("/checkout", async (req, res) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    const MIN_MNT = 1780;
+    const total = Math.max(MIN_MNT, Math.round(Number(order.totalPrice) || 0));
+
     const items = (order.foodOrderItems || []).map((it) => ({
-      foodId: it.food?.id || null,
+      id: it.food?.id || null,
       name: it.food?.foodName || "",
       qty: Number(it.quantity) || 0,
-      unitPrice: Number(it.food?.price ?? 0),
-      lineTotal: Number(it.food?.price ?? 0) * (Number(it.quantity) || 0),
+      price: Number(it.food?.price ?? 0),
     }));
 
     const itemsSummary = items
@@ -40,10 +42,6 @@ router.post("/checkout", async (req, res) => {
       .slice(0, 12)
       .map((x) => `${x.name} x${x.qty}`)
       .join(", ");
-
-    // Lemon minimum price rule (MNT)
-    const MIN_MNT = 1780;
-    const total = Math.max(MIN_MNT, Math.round(Number(order.totalPrice) || 0));
 
     console.log("🍋 LEMON checkout request:", {
       orderId: order.id,
@@ -53,7 +51,7 @@ router.post("/checkout", async (req, res) => {
       variantId: String(variantId),
     });
 
-    // Ensure LemonPayment exists
+    // ensure payment row exists
     await prisma.lemonPayment.upsert({
       where: { orderId: order.id },
       update: {},
@@ -64,24 +62,18 @@ router.post("/checkout", async (req, res) => {
       data: {
         type: "checkouts",
         attributes: {
-          // ✅ MUST BE ARRAY
-          checkout_data: [
-            {
-              // ✅ this is how we do per-order total
-              custom_price: total,
+          custom_price: total,
 
-              email: order.user?.email || undefined,
-
-              custom: {
-                order_id: String(order.id),
-                order_number: String(order.orderNumber || ""),
-                total_price: String(total),
-                currency: "MNT",
-                items_summary: String(itemsSummary || ""),
-                items: JSON.stringify(items),
-              },
-            },
-          ],
+          // ✅ safest: use custom_data (Lemon accepts it)
+          custom_data: {
+            order_id: String(order.id),
+            order_number: String(order.orderNumber || ""),
+            total_price: String(total),
+            currency: "MNT",
+            items_summary: String(itemsSummary || ""),
+            items: JSON.stringify(items),
+            email: order.user?.email || "",
+          },
 
           product_options: {
             redirect_url:
