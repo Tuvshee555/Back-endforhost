@@ -15,46 +15,22 @@ router.post("/checkout", async (req, res) => {
 
     const order = await prisma.foodOrder.findUnique({
       where: { id: String(orderId) },
-      include: {
-        foodOrderItems: {
-          include: {
-            food: { select: { id: true, foodName: true, price: true } },
-          },
-        },
-        user: { select: { email: true } },
+      select: {
+        id: true,
+        totalPrice: true,
       },
     });
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    // Lemon minimum amount
     const MIN_MNT = 1780;
     const total = Math.max(MIN_MNT, Math.round(Number(order.totalPrice) || 0));
 
-    const items = (order.foodOrderItems || []).map((it) => ({
-      id: it.food?.id || null,
-      name: it.food?.foodName || "",
-      qty: Number(it.quantity) || 0,
-      price: Number(it.food?.price ?? 0),
-    }));
-
-    const itemsSummary = items
-      .filter((x) => x.name && x.qty > 0)
-      .slice(0, 12)
-      .map((x) => `${x.name} x${x.qty}`)
-      .join(", ");
-
-    console.log("🍋 LEMON checkout request:", {
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      total: order.totalPrice,
-      finalTotal: total,
-      variantId: String(variantId),
-    });
-
-    // ensure payment row exists
+    // keep payment row
     await prisma.lemonPayment.upsert({
       where: { orderId: order.id },
-      update: {},
+      update: { status: "PENDING" },
       create: { orderId: order.id, status: "PENDING" },
     });
 
@@ -64,29 +40,17 @@ router.post("/checkout", async (req, res) => {
         attributes: {
           custom_price: total,
 
-          // ✅ safest: use custom_data (Lemon accepts it)
-          custom_data: {
-            order_id: String(order.id),
-            order_number: String(order.orderNumber || ""),
-            total_price: String(total),
-            currency: "MNT",
-            items_summary: String(itemsSummary || ""),
-            items: JSON.stringify(items),
-            email: order.user?.email || "",
-          },
-
           product_options: {
             redirect_url:
               redirectUrl ||
               `${process.env.FRONTEND_URL}/profile/orders/${order.id}`,
           },
 
-          // ✅ must be array
+          // Lemon requires this to be an array
           checkout_options: [],
 
           test_mode: process.env.LEMON_TEST_MODE === "true",
         },
-
         relationships: {
           store: {
             data: { type: "stores", id: String(process.env.LEMON_STORE_ID) },
