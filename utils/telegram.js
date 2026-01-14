@@ -53,7 +53,7 @@ export function formatOrderMessage(order) {
     `📞 Утас: ${order.phone || "-"}\n` +
     `📍 Хаяг: ${address}\n` +
     (order.notes ? `📝 Тэмдэглэл: ${order.notes}\n` : "") +
-    `\n🍔 Захиалсан хоол:\n${items}`
+    `\n📦 Захиалсан бүтээгдхүүн:\n${items}`
   );
 }
 
