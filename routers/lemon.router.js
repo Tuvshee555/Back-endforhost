@@ -17,7 +17,9 @@ router.post("/checkout", async (req, res) => {
       where: { id: String(orderId) },
       include: {
         foodOrderItems: {
-          include: { food: { select: { id: true, foodName: true, price: true } } },
+          include: {
+            food: { select: { id: true, foodName: true, price: true } },
+          },
         },
         user: { select: { email: true } },
       },
@@ -39,18 +41,19 @@ router.post("/checkout", async (req, res) => {
       .map((x) => `${x.name} x${x.qty}`)
       .join(", ");
 
-    // Lemon min rule
+    // Lemon minimum price rule (MNT)
     const MIN_MNT = 1780;
     const total = Math.max(MIN_MNT, Math.round(Number(order.totalPrice) || 0));
 
-    console.log("🍋 LEMON checkout:", {
+    console.log("🍋 LEMON checkout request:", {
       orderId: order.id,
       orderNumber: order.orderNumber,
-      totalPrice: order.totalPrice,
+      total: order.totalPrice,
       finalTotal: total,
       variantId: String(variantId),
     });
 
+    // Ensure LemonPayment exists
     await prisma.lemonPayment.upsert({
       where: { orderId: order.id },
       update: {},
@@ -61,21 +64,24 @@ router.post("/checkout", async (req, res) => {
       data: {
         type: "checkouts",
         attributes: {
-          checkout_data: {
-            email: order.user?.email || undefined,
+          // ✅ MUST BE ARRAY
+          checkout_data: [
+            {
+              // ✅ this is how we do per-order total
+              custom_price: total,
 
-            // ✅ THIS IS THE CORRECT PLACE
-            custom_price: total,
+              email: order.user?.email || undefined,
 
-            custom: {
-              order_id: String(order.id),
-              order_number: String(order.orderNumber || ""),
-              total_price: String(total),
-              currency: "MNT",
-              items_summary: String(itemsSummary || ""),
-              items: JSON.stringify(items),
+              custom: {
+                order_id: String(order.id),
+                order_number: String(order.orderNumber || ""),
+                total_price: String(total),
+                currency: "MNT",
+                items_summary: String(itemsSummary || ""),
+                items: JSON.stringify(items),
+              },
             },
-          },
+          ],
 
           product_options: {
             redirect_url:
@@ -83,6 +89,7 @@ router.post("/checkout", async (req, res) => {
               `${process.env.FRONTEND_URL}/profile/orders/${order.id}`,
           },
 
+          // ✅ must be array
           checkout_options: [],
 
           test_mode: process.env.LEMON_TEST_MODE === "true",
