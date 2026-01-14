@@ -49,7 +49,7 @@ router.post("/checkout", async (req, res) => {
       .map((x) => `${x.name} x${x.qty}`)
       .join(", ");
 
-    const total = Math.round(Number(order.totalPrice) || 0);
+    // const total = Math.round(Number(order.totalPrice) || 0);
 
     // create LemonPayment record
     await prisma.lemonPayment.upsert({
@@ -57,66 +57,65 @@ router.post("/checkout", async (req, res) => {
       update: {},
       create: { orderId, status: "PENDING" },
     });
+const MIN_MNT = 1780;
+const total = Math.max(MIN_MNT, Math.round(Number(order.totalPrice) || 0));
 
-    const payload = {
-      data: {
-        type: "checkouts",
-        attributes: {
-          // ✅ charge correct amount for each order
-          custom_price: total,
+const payload = {
+  data: {
+    type: "checkouts",
+    attributes: {
+      custom_price: total,
 
-          // ✅ optional: show in Lemon order metadata (webhook)
-          checkout_data: {
-            email: order.user?.email || undefined,
+      checkout_data: {
+        email: order.user?.email || undefined,
 
-            custom: {
-              order_id: order.id,
-              order_number: order.orderNumber,
-              total_price: total,
-              currency: "MNT",
+        custom: {
+          order_id: String(order.id),
+          order_number: String(order.orderNumber || ""),
+          total_price: String(total),
+          currency: "MNT",
 
-              items_summary: itemsSummary,
-              items,
+          items_summary: String(itemsSummary || ""),
 
-              customer: {
-                firstName: order.firstName,
-                lastName: order.lastName,
-                phone: order.phone,
-              },
-
-              delivery: {
-                city: order.city,
-                district: order.district,
-                khoroo: order.khoroo,
-                address: order.address,
-                notes: order.notes,
-              },
-            },
-          },
-
-          // ✅ redirect back to your order details page
-          product_options: {
-            redirect_url:
-              redirectUrl ||
-              `${process.env.FRONTEND_URL}/profile/orders/${orderId}`,
-          },
-
-          // ✅ Lemon requires array (keep it)
-          checkout_options: [],
-
-          test_mode: process.env.LEMON_TEST_MODE === "true",
-        },
-
-        relationships: {
-          store: {
-            data: { type: "stores", id: String(process.env.LEMON_STORE_ID) },
-          },
-          variant: {
-            data: { type: "variants", id: String(variantId) },
-          },
+          // ✅ custom fields MUST BE STRINGS in Lemon
+          items: JSON.stringify(items),
+          customer: JSON.stringify({
+            firstName: order.firstName,
+            lastName: order.lastName,
+            phone: order.phone,
+          }),
+          delivery: JSON.stringify({
+            city: order.city,
+            district: order.district,
+            khoroo: order.khoroo,
+            address: order.address,
+            notes: order.notes,
+          }),
         },
       },
-    };
+
+      product_options: {
+        redirect_url:
+          redirectUrl ||
+          `${process.env.FRONTEND_URL}/profile/orders/${orderId}`,
+      },
+
+      checkout_options: [],
+
+      test_mode: process.env.LEMON_TEST_MODE === "true",
+    },
+
+    relationships: {
+      store: {
+        data: { type: "stores", id: String(process.env.LEMON_STORE_ID) },
+      },
+      variant: {
+        data: { type: "variants", id: String(variantId) },
+      },
+    },
+  },
+};
+
 
     const apiRes = await axios.post(
       "https://api.lemonsqueezy.com/v1/checkouts",
