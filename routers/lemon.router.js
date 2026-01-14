@@ -25,39 +25,41 @@ router.post("/checkout", async (req, res) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const MIN_MNT = 1780;
-    const total = Math.max(MIN_MNT, Math.round(Number(order.totalPrice) || 0));
+    // ✅ total in MNT
+    const totalMnt = Math.round(Number(order.totalPrice) || 0);
+
+    // ✅ Lemon requires min price 1780 MNT
+    const safeMnt = Math.max(1780, totalMnt);
+
+    // ✅ IMPORTANT: Lemon needs "minor units"
+    // MNT needs ×100
+    const lemonPrice = safeMnt * 100;
 
     console.log("🍋 LEMON checkout request:", {
       orderId: order.id,
       orderNumber: order.orderNumber,
-      total,
+      totalMnt: safeMnt,
+      lemonPrice,
       variantId: String(variantId),
     });
 
-    // create LemonPayment row (so webhook can update later)
+    // store payment row
     await prisma.lemonPayment.upsert({
       where: { orderId: order.id },
       update: { status: "PENDING" },
       create: { orderId: order.id, status: "PENDING" },
     });
 
-    // ✅ CLEAN Lemon payload (only what Lemon accepts)
     const payload = {
       data: {
         type: "checkouts",
         attributes: {
-          custom_price: total,
+          custom_price: lemonPrice,
 
-          // ✅ checkout_data MUST be an OBJECT (NOT array) in Lemon checkouts API
           checkout_data: {
             email: order.user?.email || undefined,
-
-            // ✅ custom values MUST be strings
             custom: {
               order_id: String(order.id),
-              order_number: String(order.orderNumber || ""),
-              total_mnt: String(total),
             },
           },
 
@@ -67,9 +69,7 @@ router.post("/checkout", async (req, res) => {
               `${process.env.FRONTEND_URL}/profile/orders/${order.id}`,
           },
 
-          // ✅ must be array
           checkout_options: [],
-
           test_mode: process.env.LEMON_TEST_MODE === "true",
         },
 
