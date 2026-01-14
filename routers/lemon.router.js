@@ -5,34 +5,19 @@ import { prisma } from "../prismaClient.js";
 
 const router = Router();
 
-/**
- * POST /payment/lemon/checkout
- * Body:
- * {
- *   orderId: string,
- *   variantId: string|number,
- *   redirectUrl?: string
- * }
- */
 router.post("/checkout", async (req, res) => {
   try {
     const { orderId, variantId, redirectUrl } = req.body;
 
     if (!orderId || !variantId) {
-      return res
-        .status(400)
-        .json({ message: "orderId and variantId required" });
+      return res.status(400).json({ message: "orderId and variantId required" });
     }
 
     const order = await prisma.foodOrder.findUnique({
       where: { id: String(orderId) },
       include: {
         foodOrderItems: {
-          include: {
-            food: {
-              select: { id: true, foodName: true, price: true },
-            },
-          },
+          include: { food: { select: { id: true, foodName: true, price: true } } },
         },
         user: { select: { email: true } },
       },
@@ -40,7 +25,6 @@ router.post("/checkout", async (req, res) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // build items
     const items = (order.foodOrderItems || []).map((it) => ({
       foodId: it.food?.id || null,
       name: it.food?.foodName || "",
@@ -55,21 +39,18 @@ router.post("/checkout", async (req, res) => {
       .map((x) => `${x.name} x${x.qty}`)
       .join(", ");
 
-    // ✅ Lemon min price rule
+    // Lemon min rule
     const MIN_MNT = 1780;
-    const rawTotal = Number(order.totalPrice);
-    const total = Math.max(MIN_MNT, Math.round(rawTotal || 0));
+    const total = Math.max(MIN_MNT, Math.round(Number(order.totalPrice) || 0));
 
     console.log("🍋 LEMON checkout:", {
       orderId: order.id,
       orderNumber: order.orderNumber,
-      rawTotal: order.totalPrice,
-      finalCustomPrice: total,
+      totalPrice: order.totalPrice,
+      finalTotal: total,
       variantId: String(variantId),
-      test_mode: process.env.LEMON_TEST_MODE === "true",
     });
 
-    // create LemonPayment record
     await prisma.lemonPayment.upsert({
       where: { orderId: order.id },
       update: {},
@@ -80,34 +61,19 @@ router.post("/checkout", async (req, res) => {
       data: {
         type: "checkouts",
         attributes: {
-          // ✅ IMPORTANT: send custom_price as STRING
-          custom_price: String(total),
-
           checkout_data: {
             email: order.user?.email || undefined,
 
-            // ✅ Lemon requires custom values to be strings
+            // ✅ THIS IS THE CORRECT PLACE
+            custom_price: total,
+
             custom: {
               order_id: String(order.id),
               order_number: String(order.orderNumber || ""),
               total_price: String(total),
               currency: "MNT",
-
               items_summary: String(itemsSummary || ""),
-
               items: JSON.stringify(items),
-              customer: JSON.stringify({
-                firstName: order.firstName,
-                lastName: order.lastName,
-                phone: order.phone,
-              }),
-              delivery: JSON.stringify({
-                city: order.city,
-                district: order.district,
-                khoroo: order.khoroo,
-                address: order.address,
-                notes: order.notes,
-              }),
             },
           },
 
@@ -117,7 +83,6 @@ router.post("/checkout", async (req, res) => {
               `${process.env.FRONTEND_URL}/profile/orders/${order.id}`,
           },
 
-          // Lemon requires array
           checkout_options: [],
 
           test_mode: process.env.LEMON_TEST_MODE === "true",
@@ -155,7 +120,6 @@ router.post("/checkout", async (req, res) => {
       return res.status(500).json({ message: "Failed to create checkout" });
     }
 
-    // store checkoutId for fallback matching
     await prisma.lemonPayment.update({
       where: { orderId: order.id },
       data: { checkoutId, status: "PENDING" },
