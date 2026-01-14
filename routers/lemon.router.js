@@ -7,8 +7,12 @@ const router = Router();
 
 /**
  * POST /payment/lemon/checkout
- * Body: { orderId: string, variantId: string|number, redirectUrl?: string }
- * Returns: { checkoutUrl, checkoutId }
+ * Body:
+ * {
+ *   orderId: string,
+ *   variantId: string|number,
+ *   redirectUrl?: string
+ * }
  */
 router.post("/checkout", async (req, res) => {
   try {
@@ -20,11 +24,34 @@ router.post("/checkout", async (req, res) => {
 
     const order = await prisma.foodOrder.findUnique({
       where: { id: orderId },
-      select: { id: true, orderNumber: true, totalPrice: true },
+      include: {
+        foodOrderItems: {
+          include: { food: { select: { id: true, foodName: true, price: true } } },
+        },
+        user: { select: { email: true } },
+      },
     });
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    // build items
+    const items = (order.foodOrderItems || []).map((it) => ({
+      foodId: it.food?.id,
+      name: it.food?.foodName,
+      qty: it.quantity,
+      unitPrice: it.food?.price ?? 0,
+      lineTotal: (it.food?.price ?? 0) * (it.quantity ?? 0),
+    }));
+
+    const itemsSummary = items
+      .filter((x) => x.name && x.qty)
+      .slice(0, 12)
+      .map((x) => `${x.name} x${x.qty}`)
+      .join(", ");
+
+    const total = Math.round(Number(order.totalPrice) || 0);
+
+    // create LemonPayment record
     await prisma.lemonPayment.upsert({
       where: { orderId },
       update: {},
@@ -35,27 +62,57 @@ router.post("/checkout", async (req, res) => {
       data: {
         type: "checkouts",
         attributes: {
-          // ✅ safest working fields:
-          custom_price: null,
-          product_options: {
-            redirect_url:
-              redirectUrl || `${process.env.FRONTEND_URL}/payment/success`,
-          },
-          checkout_options: [], // ✅ must be array
+          // ✅ charge correct amount for each order
+          custom_price: total,
+
+          // ✅ optional: show in Lemon order metadata (webhook)
           checkout_data: {
+            email: order.user?.email || undefined,
+
             custom: {
-              order_id: orderId,
-              internal_order_number: order.orderNumber,
+              order_id: order.id,
+              order_number: order.orderNumber,
+              total_price: total,
+              currency: "MNT",
+
+              items_summary: itemsSummary,
+              items,
+
+              customer: {
+                firstName: order.firstName,
+                lastName: order.lastName,
+                phone: order.phone,
+              },
+
+              delivery: {
+                city: order.city,
+                district: order.district,
+                khoroo: order.khoroo,
+                address: order.address,
+                notes: order.notes,
+              },
             },
           },
+
+          // ✅ redirect back to your order details page
+          product_options: {
+            redirect_url:
+              redirectUrl ||
+              `${process.env.FRONTEND_URL}/profile/orders/${orderId}`,
+          },
+
+          // ✅ Lemon requires array (keep it)
+          checkout_options: [],
+
           test_mode: process.env.LEMON_TEST_MODE === "true",
         },
+
         relationships: {
           store: {
             data: { type: "stores", id: String(process.env.LEMON_STORE_ID) },
           },
           variant: {
-            data: { type: "variants", id: String(variantId) }, // ✅ string id
+            data: { type: "variants", id: String(variantId) },
           },
         },
       },
@@ -75,22 +132,20 @@ router.post("/checkout", async (req, res) => {
     );
 
     const checkoutData = apiRes.data?.data;
-    const checkoutId = checkoutData?.id;
+    const checkoutId = checkoutData?.id ? String(checkoutData.id) : null;
     const checkoutUrl = checkoutData?.attributes?.url;
 
     if (!checkoutId || !checkoutUrl) {
       return res.status(500).json({ message: "Failed to create checkout" });
     }
 
+    // store checkoutId for fallback matching
     await prisma.lemonPayment.update({
       where: { orderId },
-      data: {
-        checkoutId: String(checkoutId),
-        status: "PENDING",
-      },
+      data: { checkoutId, status: "PENDING" },
     });
 
-    return res.status(200).json({ checkoutId, checkoutUrl });
+    return res.status(200).json({ checkoutUrl, checkoutId });
   } catch (err) {
     console.error("LEMON CHECKOUT ERROR:", err?.response?.data || err);
     return res.status(500).json({ message: "Failed to create checkout" });
