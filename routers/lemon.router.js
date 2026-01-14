@@ -14,31 +14,52 @@ router.post("/checkout", async (req, res) => {
     }
 
     const order = await prisma.foodOrder.findUnique({
-      where: { id: String(orderId) },
+      where: { id: orderId },
       select: {
         id: true,
+        orderNumber: true,
         totalPrice: true,
+        user: { select: { email: true } },
       },
     });
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // Lemon minimum amount
     const MIN_MNT = 1780;
     const total = Math.max(MIN_MNT, Math.round(Number(order.totalPrice) || 0));
 
-    // keep payment row
+    console.log("🍋 LEMON checkout request:", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      total,
+      variantId: String(variantId),
+    });
+
+    // create LemonPayment row (so webhook can update later)
     await prisma.lemonPayment.upsert({
       where: { orderId: order.id },
       update: { status: "PENDING" },
       create: { orderId: order.id, status: "PENDING" },
     });
 
+    // ✅ CLEAN Lemon payload (only what Lemon accepts)
     const payload = {
       data: {
         type: "checkouts",
         attributes: {
           custom_price: total,
+
+          // ✅ checkout_data MUST be an OBJECT (NOT array) in Lemon checkouts API
+          checkout_data: {
+            email: order.user?.email || undefined,
+
+            // ✅ custom values MUST be strings
+            custom: {
+              order_id: String(order.id),
+              order_number: String(order.orderNumber || ""),
+              total_mnt: String(total),
+            },
+          },
 
           product_options: {
             redirect_url:
@@ -46,11 +67,12 @@ router.post("/checkout", async (req, res) => {
               `${process.env.FRONTEND_URL}/profile/orders/${order.id}`,
           },
 
-          // Lemon requires this to be an array
+          // ✅ must be array
           checkout_options: [],
 
           test_mode: process.env.LEMON_TEST_MODE === "true",
         },
+
         relationships: {
           store: {
             data: { type: "stores", id: String(process.env.LEMON_STORE_ID) },
@@ -77,7 +99,7 @@ router.post("/checkout", async (req, res) => {
 
     const checkoutData = apiRes.data?.data;
     const checkoutId = checkoutData?.id ? String(checkoutData.id) : null;
-    const checkoutUrl = checkoutData?.attributes?.url || null;
+    const checkoutUrl = checkoutData?.attributes?.url;
 
     if (!checkoutId || !checkoutUrl) {
       return res.status(500).json({ message: "Failed to create checkout" });
@@ -90,16 +112,13 @@ router.post("/checkout", async (req, res) => {
 
     return res.status(200).json({ checkoutUrl, checkoutId });
   } catch (err) {
-    const status = err?.response?.status || 500;
-    const data = err?.response?.data || null;
+    console.error("❌ LEMON CHECKOUT ERROR STATUS:", err?.response?.status);
+    console.error("❌ LEMON CHECKOUT ERROR DATA:", err?.response?.data || err);
 
-    console.error("❌ LEMON CHECKOUT ERROR STATUS:", status);
-    console.error("❌ LEMON CHECKOUT ERROR DATA:", data);
-
-    return res.status(status).json({
+    return res.status(500).json({
       message: "Failed to create checkout",
-      status,
-      data,
+      status: err?.response?.status,
+      data: err?.response?.data,
     });
   }
 });
