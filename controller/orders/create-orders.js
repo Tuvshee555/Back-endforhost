@@ -28,9 +28,10 @@ export const createFoodOrder = async (req, res) => {
 
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    if (!paymentMethod || !["COD", "BANK", "QPAY"].includes(paymentMethod)) {
-      return res.status(400).json({ message: "Invalid payment method" });
-    }
+   if (!paymentMethod || !["COD", "BANK", "QPAY", "LEMON"].includes(paymentMethod)) {
+  return res.status(400).json({ message: "Invalid payment method" });
+}
+
 
     if (typeof totalPrice === "undefined" || Number.isNaN(Number(totalPrice))) {
       return res.status(400).json({ message: "Invalid total price" });

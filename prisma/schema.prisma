@@ -103,6 +103,8 @@ model FoodOrder {
 
   user           User        @relation(fields: [userId], references: [id])
   foodOrderItems OrderItem[]
+
+  lemonPayments LemonPayment[]
 }
 
 model OrderItem {
@@ -116,6 +118,20 @@ model OrderItem {
   User     User?     @relation(fields: [userId], references: [id])
 
   @@index([orderId])
+}
+
+model LemonPayment {
+  id           String   @id @default(uuid())
+  orderId      String   @unique
+  checkoutId   String?
+  lemonOrderId String?  @unique
+  status       String   @default("PENDING") // PENDING | PAID | FAILED | REFUNDED
+  amount       Float?
+  currency     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  order FoodOrder @relation(fields: [orderId], references: [id])
 }
 
 enum Role {
@@ -142,4 +158,5 @@ enum PaymentMethod {
   COD
   BANK
   QPAY
+  LEMON
 }
