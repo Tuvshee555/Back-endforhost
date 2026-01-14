@@ -147,9 +147,15 @@ router.post("/checkout", async (req, res) => {
 
     return res.status(200).json({ checkoutUrl, checkoutId });
   } catch (err) {
-    console.error("LEMON CHECKOUT ERROR:", err?.response?.data || err);
-    return res.status(500).json({ message: "Failed to create checkout" });
-  }
+  console.error("LEMON CHECKOUT ERROR STATUS:", err?.response?.status);
+  console.error("LEMON CHECKOUT ERROR DATA:", err?.response?.data);
+  return res.status(500).json({
+    message: "Failed to create checkout",
+    status: err?.response?.status,
+    data: err?.response?.data,
+  });
+}
+
 });
 
 export default router;
