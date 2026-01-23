@@ -1,4 +1,5 @@
 import { prisma } from "../../utils/prisma.js";
+import { Prisma } from "@prisma/client";
 
 function clampRating(value) {
   const n = Number(value);
@@ -18,7 +19,8 @@ export const createFoodReview = async (req, res) => {
     }
 
     const rating = clampRating(req.body.rating);
-    const comment = typeof req.body.comment === "string" ? req.body.comment.trim() : "";
+    const comment =
+      typeof req.body.comment === "string" ? req.body.comment.trim() : "";
 
     const images = Array.isArray(req.body.images)
       ? req.body.images.filter((x) => typeof x === "string").slice(0, 6)
@@ -29,11 +31,12 @@ export const createFoodReview = async (req, res) => {
     }
 
     if (comment.length < 2 || comment.length > 800) {
-      return res.status(400).json({ message: "Comment must be 2-800 characters" });
+      return res
+        .status(400)
+        .json({ message: "Comment must be 2-800 characters" });
     }
 
     // ✅ VERIFIED PURCHASE CHECK:
-    // user must have PAID / DELIVERING / DELIVERED order containing this food
     const bought = await prisma.orderItem.findFirst({
       where: {
         foodId,
@@ -51,8 +54,19 @@ export const createFoodReview = async (req, res) => {
       });
     }
 
-    const created = await prisma.review.create({
-      data: {
+    // ✅ VITALS STYLE:
+    // If the user already reviewed -> update instead of throwing unique constraint
+    const review = await prisma.review.upsert({
+      where: {
+        foodId_userId: { foodId, userId }, // ✅ requires @@unique([foodId, userId])
+      },
+      update: {
+        rating,
+        comment,
+        images,
+        verifiedPurchase: true,
+      },
+      create: {
         foodId,
         userId,
         rating,
@@ -77,11 +91,17 @@ export const createFoodReview = async (req, res) => {
       },
     });
 
-    return res.status(201).json({ review: created });
+    // ✅ return created/updated review
+    return res.status(201).json({ review });
   } catch (err) {
-    // Prisma unique constraint (already reviewed)
-    if (err?.code === "P2002") {
-      return res.status(409).json({ message: "You already reviewed this food." });
+    // Prisma known errors
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      // unique constraint (should almost never happen now because of upsert)
+      if (err.code === "P2002") {
+        return res
+          .status(409)
+          .json({ message: "You already reviewed this food." });
+      }
     }
 
     console.error("createFoodReview error:", err);
