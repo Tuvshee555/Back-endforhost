@@ -1,10 +1,8 @@
-// controller/orders/update-orders.js
 import { prisma } from "../../prismaClient.js";
 import {
   sendTelegramMessage,
   formatOrderStatusMessage,
 } from "../../utils/telegram.js";
-
 import { sendEmail } from "../../utils/sendEmail.js";
 import { orderStatusChangedEmail } from "../../utils/emailTemplates.js";
 
@@ -17,9 +15,6 @@ const ALLOWED_TRANSITIONS = {
   DELIVERED: [],
   CANCELLED: [],
 };
-
-// 👇 statuses that mean “count sale”
-const SALES_STATUSES = new Set(["PAID", "DELIVERED"]);
 
 export const updatedFoodOrder = async (req, res) => {
   const { id } = req.params;
@@ -45,9 +40,13 @@ export const updatedFoodOrder = async (req, res) => {
       },
     });
 
-    if (!existing) return res.status(404).json({ message: "Order not found" });
+    if (!existing) {
+      return res.status(404).json({ message: "Order not found" });
+    }
 
-    // 🔒 Status transition guard
+    /* -------------------------------------------------- */
+    /* 🔒 STATUS TRANSITION GUARD                          */
+    /* -------------------------------------------------- */
     if (status) {
       const allowed = ALLOWED_TRANSITIONS[existing.status] || [];
       if (!allowed.includes(status)) {
@@ -82,15 +81,22 @@ export const updatedFoodOrder = async (req, res) => {
     const oldStatus = existing.status;
     const newStatus = updated.status;
 
-    /* ------------------------------------------------------------------ */
-    /* 🟢 SALES COUNT LOGIC (THIS FIXES BESTSELLER)                       */
-    /* ------------------------------------------------------------------ */
+    console.log("STATUS CHANGE:", oldStatus, "→", newStatus);
 
+    /* -------------------------------------------------- */
+    /* 🟢 SALES COUNT (CORRECT + SAFE)                     */
+    /* -------------------------------------------------- */
+    /**
+     * ✅ Count sales ONLY when order ENTERS PAID
+     * This guarantees:
+     * - No double counting
+     * - Works for QPay / BANK / manual admin
+     * - Bestseller works correctly
+     */
     const shouldCountSale =
       status &&
-      oldStatus !== newStatus &&
-      SALES_STATUSES.has(newStatus) &&
-      !SALES_STATUSES.has(oldStatus); // prevents double increment
+      oldStatus !== "PAID" &&
+      newStatus === "PAID";
 
     if (shouldCountSale) {
       try {
@@ -98,21 +104,31 @@ export const updatedFoodOrder = async (req, res) => {
           await prisma.food.update({
             where: { id: item.food.id },
             data: {
-              salesCount: { increment: item.quantity },
+              salesCount: {
+                increment: item.quantity,
+              },
             },
           });
         }
-        console.log("📈 Sales count updated for order:", updated.orderNumber);
+
+        console.log(
+          "📈 Sales count incremented for order:",
+          updated.orderNumber
+        );
       } catch (salesErr) {
-        console.error("❌ Failed to update salesCount:", salesErr);
+        console.error("❌ Failed to increment salesCount:", salesErr);
       }
     }
 
-    /* ------------------------------------------------------------------ */
-    /* 🔔 NOTIFICATIONS                                                    */
-    /* ------------------------------------------------------------------ */
-
-    const IMPORTANT = new Set(["PAID", "CANCELLED", "DELIVERED", "DELIVERING"]);
+    /* -------------------------------------------------- */
+    /* 🔔 TELEGRAM NOTIFICATIONS                           */
+    /* -------------------------------------------------- */
+    const IMPORTANT = new Set([
+      "PAID",
+      "CANCELLED",
+      "DELIVERING",
+      "DELIVERED",
+    ]);
 
     if (status && oldStatus !== newStatus && IMPORTANT.has(newStatus)) {
       try {
@@ -120,11 +136,18 @@ export const updatedFoodOrder = async (req, res) => {
           formatOrderStatusMessage(updated, oldStatus, newStatus)
         );
       } catch (tgErr) {
-        console.error("❌ Telegram status notify failed:", tgErr);
+        console.error("❌ Telegram notify failed:", tgErr);
       }
     }
 
-    const EMAIL_STATUSES = new Set(["DELIVERING", "DELIVERED", "CANCELLED"]);
+    /* -------------------------------------------------- */
+    /* 📧 CUSTOMER EMAILS                                 */
+    /* -------------------------------------------------- */
+    const EMAIL_STATUSES = new Set([
+      "DELIVERING",
+      "DELIVERED",
+      "CANCELLED",
+    ]);
 
     if (status && oldStatus !== newStatus && EMAIL_STATUSES.has(newStatus)) {
       try {
@@ -142,15 +165,19 @@ export const updatedFoodOrder = async (req, res) => {
                 : newStatus === "DELIVERED"
                 ? `🏁 Захиалга хүргэгдлээ #${updated.orderNumber}`
                 : `❌ Захиалга цуцлагдлаа #${updated.orderNumber}`,
-            html: orderStatusChangedEmail(updated, oldStatus, newStatus),
+            html: orderStatusChangedEmail(
+              updated,
+              oldStatus,
+              newStatus
+            ),
           });
         }
       } catch (mailErr) {
-        console.error("❌ Customer status email failed:", mailErr);
+        console.error("❌ Customer email failed:", mailErr);
       }
     }
 
-    /* ------------------------------------------------------------------ */
+    /* -------------------------------------------------- */
 
     return res.status(200).json({
       id: updated.id,
