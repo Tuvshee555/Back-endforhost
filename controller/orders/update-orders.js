@@ -18,6 +18,9 @@ const ALLOWED_TRANSITIONS = {
   CANCELLED: [],
 };
 
+// 👇 statuses that mean “count sale”
+const SALES_STATUSES = new Set(["PAID", "DELIVERED"]);
+
 export const updatedFoodOrder = async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ message: "Order ID required" });
@@ -79,9 +82,38 @@ export const updatedFoodOrder = async (req, res) => {
     const oldStatus = existing.status;
     const newStatus = updated.status;
 
+    /* ------------------------------------------------------------------ */
+    /* 🟢 SALES COUNT LOGIC (THIS FIXES BESTSELLER)                       */
+    /* ------------------------------------------------------------------ */
+
+    const shouldCountSale =
+      status &&
+      oldStatus !== newStatus &&
+      SALES_STATUSES.has(newStatus) &&
+      !SALES_STATUSES.has(oldStatus); // prevents double increment
+
+    if (shouldCountSale) {
+      try {
+        for (const item of updated.foodOrderItems) {
+          await prisma.food.update({
+            where: { id: item.food.id },
+            data: {
+              salesCount: { increment: item.quantity },
+            },
+          });
+        }
+        console.log("📈 Sales count updated for order:", updated.orderNumber);
+      } catch (salesErr) {
+        console.error("❌ Failed to update salesCount:", salesErr);
+      }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 🔔 NOTIFICATIONS                                                    */
+    /* ------------------------------------------------------------------ */
+
     const IMPORTANT = new Set(["PAID", "CANCELLED", "DELIVERED", "DELIVERING"]);
 
-    // ✅ Telegram notify
     if (status && oldStatus !== newStatus && IMPORTANT.has(newStatus)) {
       try {
         await sendTelegramMessage(
@@ -92,7 +124,6 @@ export const updatedFoodOrder = async (req, res) => {
       }
     }
 
-    // ✅ Customer email notify (only for these)
     const EMAIL_STATUSES = new Set(["DELIVERING", "DELIVERED", "CANCELLED"]);
 
     if (status && oldStatus !== newStatus && EMAIL_STATUSES.has(newStatus)) {
@@ -118,6 +149,8 @@ export const updatedFoodOrder = async (req, res) => {
         console.error("❌ Customer status email failed:", mailErr);
       }
     }
+
+    /* ------------------------------------------------------------------ */
 
     return res.status(200).json({
       id: updated.id,
