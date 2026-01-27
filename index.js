@@ -16,6 +16,7 @@ import { expireUnpaidOrders } from "./jobs/expireOrders.js";
 import lemonWebhookRouter from "./routers/lemonWebhook.router.js";
 import lemonRouter from "./routers/lemon.router.js";
 import { reviewRouter } from "./routers/review.router.js";
+import aiRouter from "./routers/ai.router.js";
 
 dotenv.config();
 
@@ -71,6 +72,7 @@ app.use("/email", emailRouter);
 app.use("/stripe", stripeRouter);
 app.use("/upload", uploadRouter);
 app.use("/review", reviewRouter);
+app.use("/ai", aiRouter);
 
 
 /* lemon checkout route (create checkout) */
