@@ -14,6 +14,18 @@ export const updateUser = async (req, res) => {
   } = req.body;
 
   try {
+    const requesterId = req.user?.id;
+    const requesterRole = req.user?.role;
+
+    if (!requesterId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // allow self or admin
+    if (requesterRole !== "ADMIN" && requesterId !== id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id },
       data: {

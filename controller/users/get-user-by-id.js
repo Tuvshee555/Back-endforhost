@@ -4,6 +4,17 @@ export const getUserById = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const requesterId = req.user?.id;
+    const requesterRole = req.user?.role;
+
+    if (!requesterId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (requesterRole !== "ADMIN" && requesterId !== id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id },
       select: {

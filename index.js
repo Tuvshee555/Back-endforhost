@@ -23,6 +23,17 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+/* ---------------- REQUIRED ENV CHECKS ---------------- */
+if (!process.env.JWT_SECRET) {
+  console.error("Missing JWT_SECRET. Set it in your environment.");
+  process.exit(1);
+}
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  console.warn("Warning: STRIPE_WEBHOOK_SECRET not set. Stripe webhooks will fail verification.");
+}
+if (!process.env.QPAY_WEBHOOK_SECRET) {
+  console.warn("Warning: QPAY_WEBHOOK_SECRET not set. QPay webhook signatures will not be verified.");
+}
 /* ---------------- CORS ---------------- */
 app.use(
   cors({
@@ -41,6 +52,9 @@ app.use(
 );
 
 app.options("*", cors());
+
+/* ---------------- STRIPE ROUTES FIRST (raw body) ---------------- */
+app.use("/stripe", stripeRouter);
 
 /* ---------------- BODY PARSERS ---------------- */
 /* JSON with raw buffer capture for webhook verification */
@@ -69,7 +83,6 @@ app.use("/items", items);
 app.use("/qpay", qpayRouter);
 app.use("/stats", statRouter);
 app.use("/email", emailRouter);
-app.use("/stripe", stripeRouter);
 app.use("/upload", uploadRouter);
 app.use("/review", reviewRouter);
 app.use("/ai", aiRouter);

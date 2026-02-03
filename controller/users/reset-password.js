@@ -6,6 +6,10 @@ export const resetPassword = async (req, res) => {
   const { token, newPassword } = req.body;
 
   try {
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: "Auth not configured" });
+    }
+
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;

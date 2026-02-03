@@ -5,14 +5,15 @@ import { getFood } from "../controller/foods/get-food.js";
 import { updateFood } from "../controller/foods/update-food.js";
 import { deleteAllFoods } from "../controller/foods/delete-all-food.js";
 import { getFoodById } from "../controller/foods/get-food-by-id.js";
+import { requireAdmin } from "../middleware/requireAdmin.js";
 
 export const foodRouter = Router();
 
-foodRouter.post("/", createFood);
+foodRouter.post("/", requireAdmin, createFood);
 foodRouter.get("/", getFood);
-foodRouter.put("/:id", updateFood);
+foodRouter.put("/:id", requireAdmin, updateFood);
 foodRouter.get("/:id", getFoodById); 
 
 
-foodRouter.delete("/", deleteAllFoods);
-foodRouter.delete("/:id", deleteFood);
+foodRouter.delete("/", requireAdmin, deleteAllFoods);
+foodRouter.delete("/:id", requireAdmin, deleteFood);

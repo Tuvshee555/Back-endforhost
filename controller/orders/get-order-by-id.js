@@ -5,6 +5,13 @@ export const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const requesterId = req.user?.id;
+    const requesterRole = req.user?.role;
+
+    if (!requesterId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     if (!id) {
       return res.status(400).json({ message: "Order ID is required" });
     }
@@ -22,6 +29,10 @@ export const getOrderById = async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (requesterRole !== "ADMIN" && order.userId !== requesterId) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     // 🔑 Get latest payment (for QPay QR re-display)

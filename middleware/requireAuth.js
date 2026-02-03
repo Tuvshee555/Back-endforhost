@@ -1,10 +1,18 @@
 import jwt from "jsonwebtoken";
 
 export const requireAuth = (req, res, next) => {
-  const auth = req.headers.authorization || req.headers.Authorization || req.headers["authorization"];
+  const auth =
+    req.headers.authorization ||
+    req.headers.Authorization ||
+    req.headers["authorization"];
 
   if (!auth || typeof auth !== "string" || !auth.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET is not set; refusing to process auth");
+    return res.status(500).json({ message: "Auth misconfiguration" });
   }
 
   const token = auth.split(" ")[1];
@@ -19,13 +27,19 @@ export const requireAuth = (req, res, next) => {
       decoded?.user_id ??
       decoded?.userID ??
       null;
+    const role = decoded?.role ?? decoded?.userRole ?? null;
 
     if (!userId) {
-      console.error("requireAuth: token decoded but missing user id claims:", decoded);
-      return res.status(401).json({ message: "Invalid token: missing user id" });
+      console.error(
+        "requireAuth: token decoded but missing user id claims:",
+        decoded
+      );
+      return res
+        .status(401)
+        .json({ message: "Invalid token: missing user id" });
     }
 
-    req.user = { id: userId };
+    req.user = { id: userId, role: role || "USER" };
     next();
   } catch (err) {
     console.error("requireAuth: token verify error:", err);

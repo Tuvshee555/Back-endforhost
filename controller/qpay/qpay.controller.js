@@ -4,6 +4,7 @@ import {
   sendTelegramMessage,
   formatOrderStatusMessage,
 } from "../../utils/telegram.js";
+import crypto from "crypto";
 
 import { sendEmail } from "../../utils/sendEmail.js";
 import { paymentConfirmedEmail } from "../../utils/emailTemplates.js";
@@ -199,6 +200,28 @@ export const checkPayment = async (req, res) => {
 export const webhook = async (req, res) => {
   try {
     console.log("🔥 QPay webhook received:", req.body);
+
+    // Basic HMAC verification (if secret configured)
+    const secret = process.env.QPAY_WEBHOOK_SECRET;
+    const signature =
+      req.headers["x-qpay-signature"] ||
+      req.headers["X-QPAY-Signature"] ||
+      req.headers["x-signature"];
+
+    if (secret) {
+      if (!req.rawBody) {
+        console.error("✖ Missing rawBody for QPay signature verification");
+        return res.status(400).json({ error: "Bad request" });
+      }
+      const computed = crypto
+        .createHmac("sha256", secret)
+        .update(req.rawBody)
+        .digest("hex");
+      if (!signature || computed !== signature) {
+        console.warn("✖ Invalid QPay signature");
+        return res.status(400).json({ error: "Invalid signature" });
+      }
+    }
 
     const { invoice_id, paid_amount, status } = req.body;
 

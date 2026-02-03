@@ -11,18 +11,20 @@ import { facebookAuth } from "../controller/users/facebook-auth.js";
 import { validateUserId } from "../middleware/validate-user-id.js";
 import { getUserById } from "../controller/users/get-user-by-id.js";
 import { createGuestUser } from "../controller/users/create-guest.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireAdmin } from "../middleware/requireAdmin.js";
 
 
 
 export const userRouter = express.Router();
 
 // Standard CRUD
-userRouter.get("/", getUsers);
+userRouter.get("/", requireAdmin, getUsers);
 userRouter.post("/", createUser);
 userRouter.post("/login", loginUser);
-userRouter.put("/:id", validateUserId , updateUser);
-userRouter.delete("/:id", validateUserId , deleteUser);
-userRouter.get("/:id", validateUserId, getUserById);
+userRouter.put("/:id", requireAuth, validateUserId , updateUser);
+userRouter.delete("/:id", requireAuth, validateUserId , deleteUser);
+userRouter.get("/:id", requireAuth, validateUserId, getUserById);
 userRouter.post("/guest", createGuestUser);
 
 

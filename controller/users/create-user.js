@@ -3,12 +3,12 @@ import { prisma } from "../../prismaClient.js"; // import your Prisma Client
 
 export const createUser = async (req, res) => {
   try {
-    const { email, password, phonenumber, address, role } = req.body;
+    const { email, password, phonenumber, address } = req.body;
 
-    if (!email || !password || !role) {
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: "Email, password, and role are required!",
+        message: "Email and password are required!",
       });
     }
 
@@ -36,7 +36,7 @@ export const createUser = async (req, res) => {
         password: hashedPassword,
         phonenumber,
         address,
-        role,
+        role: "USER",
       },
     });
 

@@ -2,10 +2,19 @@
 import { Router } from "express";
 import axios from "axios";
 import { prisma } from "../prismaClient.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import rateLimit from "express-rate-limit";
 
 const router = Router();
 
-router.post("/checkout", async (req, res) => {
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
   try {
     const { orderId, variantId, redirectUrl } = req.body;
 

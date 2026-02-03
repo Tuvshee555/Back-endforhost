@@ -11,7 +11,8 @@ export async function webhookHandler(req, res) {
 
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    const raw = req.rawBody || req.body;
+    event = stripe.webhooks.constructEvent(raw, sig, webhookSecret);
   } catch (err) {
     console.error("Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -33,7 +34,7 @@ export async function webhookHandler(req, res) {
       // Update the related FoodOrder to reflect payment (adapt to your model)
       await prisma.foodOrder.updateMany({
         where: { id: orderId },
-        data: { status: "PENDING" }, // keep PENDING for fulfillment, or add a paid flag if you want
+        data: { status: "PAID" },
       });
 
       console.log(`Stripe: session ${sessionId} completed, order ${orderId} marked PAID.`);

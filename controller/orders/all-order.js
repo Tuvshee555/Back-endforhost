@@ -3,9 +3,11 @@ import { prisma } from "../../prismaClient.js";
 
 export const getAllOrder = async (req, res) => {
   try {
-    // 🔐 Any authenticated user (as requested)
     if (!req.user?.id) {
       return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Admin only" });
     }
 
     const orders = await prisma.foodOrder.findMany({

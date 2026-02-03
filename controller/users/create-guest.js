@@ -1,13 +1,12 @@
 // controller/users/create-guest.js
 import { prisma } from "../../prismaClient.js";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 export const createGuestUser = async (req, res) => {
   try {
-    const { guestId } = req.body;
-    if (!guestId) {
-      return res.status(400).json({ success: false, message: "guestId missing" });
-    }
+    // always generate server-side to prevent spoofing/collisions
+    const guestId = crypto.randomUUID();
 
     const user = await prisma.user.upsert({
       where: { id: guestId },

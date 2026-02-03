@@ -51,10 +51,15 @@ export const loginUser = async (req, res) => {
       });
     }
 
+    if (!process.env.JWT_SECRET) {
+      console.error("Missing JWT_SECRET in environment");
+      return res.status(500).json({ message: "Auth not configured" });
+    }
+
     // Generate JWT token
     const token = jwt.sign(
-      { userId: existingUser.id, role: existingUser.role },
-      process.env.JWT_SECRET || "your_very_secure_secret_key",
+      { id: existingUser.id, role: existingUser.role },
+      process.env.JWT_SECRET,
       { expiresIn: "78h" }
     );
 
