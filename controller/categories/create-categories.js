@@ -33,9 +33,16 @@ export const createCategories = async (req, res) => {
 
     // Return updated category list (flat) – same style as before
     const categories = await prisma.category.findMany({
-      include: {
-        foods: true,
-        children: true,
+      select: {
+        id: true,
+        categoryName: true,
+        parentId: true,
+        _count: {
+          select: {
+            foods: true,
+            children: true,
+          },
+        },
       },
       orderBy: { categoryName: "asc" },
     });
@@ -44,9 +51,9 @@ export const createCategories = async (req, res) => {
       id: c.id,
       categoryName: c.categoryName,
       parentId: c.parentId,
-      foodCount: c.foods.length,
-      childrenCount: c.children.length,
-      hasChildren: c.children.length > 0,
+      foodCount: c._count.foods,
+      childrenCount: c._count.children,
+      hasChildren: c._count.children > 0,
     }));
 
     res.status(200).json(mapped);

@@ -3,10 +3,16 @@ import { prisma } from "../../prismaClient.js";
 
 export const getCategoryTree = async (req, res) => {
   try {
-    // get all categories once
     const all = await prisma.category.findMany({
-      include: {
-        foods: true,
+      select: {
+        id: true,
+        categoryName: true,
+        parentId: true,
+        _count: {
+          select: {
+            foods: true,
+          },
+        },
       },
       orderBy: { categoryName: "asc" },
     });
@@ -20,7 +26,7 @@ export const getCategoryTree = async (req, res) => {
         id: cat.id,
         categoryName: cat.categoryName,
         parentId: cat.parentId,
-        foodCount: cat.foods.length,
+        foodCount: cat._count.foods,
         children: [],
       });
     }

@@ -6,7 +6,7 @@ import { prisma } from "../../prismaClient.js";
  * {
  *   success: true,
  *   category: { id, categoryName },
- *   foods: Food[] (with derived salesCount)
+ *   foods: Food[] (with persisted salesCount)
  * }
  */
 export const getCategoryFoodsTree = async (req, res) => {
@@ -61,35 +61,30 @@ export const getCategoryFoodsTree = async (req, res) => {
           in: idList,
         },
       },
-      include: {
-        OrderItem: {
-          where: {
-            order: {
-              status: { in: ["PAID", "DELIVERED"] },
-            },
-          },
-          select: {
-            quantity: true,
-          },
-        },
+      select: {
+        id: true,
+        foodName: true,
+        price: true,
+        image: true,
+        address: true,
+        ingredients: true,
+        categoryId: true,
+        createdAt: true,
+        extraImages: true,
+        updatedAt: true,
+        video: true,
+        isFeatured: true,
+        salesCount: true,
+        oldPrice: true,
+        discount: true,
+        avgRating: true,
+        reviewCount: true,
+        sizes: true,
+        category: true,
       },
       orderBy: {
         createdAt: "desc",
       },
-    });
-
-    // 🔥 derive salesCount
-    const foodsWithSales = foods.map((food) => {
-      const salesCount = food.OrderItem.reduce(
-        (sum, item) => sum + item.quantity,
-        0
-      );
-
-      const { OrderItem, ...rest } = food;
-      return {
-        ...rest,
-        salesCount,
-      };
     });
 
     return res.status(200).json({
@@ -98,7 +93,7 @@ export const getCategoryFoodsTree = async (req, res) => {
         id: target.id,
         categoryName: target.categoryName,
       },
-      foods: foodsWithSales,
+      foods,
     });
   } catch (error) {
     console.error("Error in getCategoryFoodsTree:", error);

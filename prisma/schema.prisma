@@ -66,6 +66,10 @@ model Food {
   reviews     Review[]
   avgRating   Float    @default(0)
   reviewCount Int      @default(0)
+
+  @@index([categoryId])
+  @@index([createdAt])
+  @@index([salesCount])
 }
 
 model FoodSize {
@@ -74,6 +78,8 @@ model FoodSize {
   label  String
   stock  Int?
   food   Food   @relation(fields: [foodId], references: [id])
+
+  @@index([foodId])
 }
 
 model Category {
@@ -85,6 +91,8 @@ model Category {
   children Category[] @relation("CategoryChildren")
 
   foods Food[] // food can belong to any category level
+
+  @@index([parentId])
 }
 
 model FoodOrder {
@@ -111,6 +119,9 @@ model FoodOrder {
   foodOrderItems OrderItem[]
 
   lemonPayments LemonPayment[]
+
+  @@index([userId, status])
+  @@index([status])
 }
 
 model OrderItem {
@@ -124,6 +135,9 @@ model OrderItem {
   User     User?     @relation(fields: [userId], references: [id])
 
   @@index([orderId])
+  @@index([foodId])
+  @@index([userId])
+  @@index([foodId, orderId])
 }
 
 model LemonPayment {

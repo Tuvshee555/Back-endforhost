@@ -16,9 +16,16 @@ export const getCategories = async (req, res) => {
 
     const categories = await prisma.category.findMany({
       where,
-      include: {
-        foods: true,
-        children: true,
+      select: {
+        id: true,
+        categoryName: true,
+        parentId: true,
+        _count: {
+          select: {
+            foods: true,
+            children: true,
+          },
+        },
       },
       orderBy: { categoryName: "asc" },
     });
@@ -27,9 +34,9 @@ export const getCategories = async (req, res) => {
       id: cat.id,
       categoryName: cat.categoryName,
       parentId: cat.parentId,
-      foodCount: cat.foods.length,
-      childrenCount: cat.children.length,
-      hasChildren: cat.children.length > 0,
+      foodCount: cat._count.foods,
+      childrenCount: cat._count.children,
+      hasChildren: cat._count.children > 0,
     }));
 
     res.status(200).json(mapped);

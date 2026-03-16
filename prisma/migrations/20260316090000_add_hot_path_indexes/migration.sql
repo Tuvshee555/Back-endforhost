@@ -1,0 +1,10 @@
+CREATE INDEX "Food_categoryId_idx" ON "Food"("categoryId");
+CREATE INDEX "Food_createdAt_idx" ON "Food"("createdAt");
+CREATE INDEX "Food_salesCount_idx" ON "Food"("salesCount");
+CREATE INDEX "FoodSize_foodId_idx" ON "FoodSize"("foodId");
+CREATE INDEX "Category_parentId_idx" ON "Category"("parentId");
+CREATE INDEX "FoodOrder_userId_status_idx" ON "FoodOrder"("userId", "status");
+CREATE INDEX "FoodOrder_status_idx" ON "FoodOrder"("status");
+CREATE INDEX "OrderItem_foodId_idx" ON "OrderItem"("foodId");
+CREATE INDEX "OrderItem_userId_idx" ON "OrderItem"("userId");
+CREATE INDEX "OrderItem_foodId_orderId_idx" ON "OrderItem"("foodId", "orderId");
