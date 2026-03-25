@@ -17,6 +17,7 @@ import lemonWebhookRouter from "./routers/lemonWebhook.router.js";
 import lemonRouter from "./routers/lemon.router.js";
 import { reviewRouter } from "./routers/review.router.js";
 import aiRouter from "./routers/ai.router.js";
+import { connectPrismaWithRetry } from "./utils/prisma.js";
 
 dotenv.config();
 
@@ -101,10 +102,28 @@ app.use((err, req, res, next) => {
 });
 
 /* ---------------- SERVER ---------------- */
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await connectPrismaWithRetry();
+    console.log("✅ Database connected");
 
-/* ---------------- CRON ---------------- */
-// ⏳ Expire unpaid QPay orders every 5 minutes
-setInterval(expireUnpaidOrders, 5 * 60 * 1000);
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+
+    // Expire unpaid QPay orders every 5 minutes only after DB is ready.
+    setInterval(expireUnpaidOrders, 5 * 60 * 1000);
+  } catch (error) {
+    console.error("❌ Failed to connect to PostgreSQL.");
+    console.error(
+      "Check DATABASE_URL in .env and make sure it matches the current Render database URL."
+    );
+    console.error(
+      "If you are running locally, use the External Database URL from Render. If this backend is deployed on Render, use the Internal Database URL."
+    );
+    console.error("Startup error:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();

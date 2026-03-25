@@ -4,13 +4,28 @@ import { prisma } from "../../prismaClient.js";
 export const getOrdersByUser = async (req, res) => {
   try {
     const authUserId = req.user?.id;
+    const requesterRole = req.user?.role;
+    const requestedUserId = req.params.userId;
 
     if (!authUserId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    if (
+      requesterRole !== "ADMIN" &&
+      requestedUserId &&
+      requestedUserId !== authUserId
+    ) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const userId =
+      requesterRole === "ADMIN" && requestedUserId
+        ? requestedUserId
+        : authUserId;
+
     const orders = await prisma.foodOrder.findMany({
-      where: { userId: authUserId },
+      where: { userId },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,

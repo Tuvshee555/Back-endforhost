@@ -5,11 +5,16 @@ import { prisma } from "../../prismaClient.js";
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    console.log("Forgot password request for:", email);
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    console.log("Forgot password request for:", normalizedEmail);
 
-    // Prisma uses findUnique with a `where` object
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, email: true },
+    });
+    if (!user) {
+      return res.json({ message: "If that account exists, a reset email has been sent" });
+    }
 
     console.log("User found:", user.email);
 
@@ -22,12 +27,25 @@ export const forgotPassword = async (req, res) => {
       expiresIn: "15m",
     });
 
-    const resetLink = `${process.env.NEXT_PUBLIC_BACKEND_URL}/reset-password?token=${resetToken}`;
+    const resetBaseUrl =
+      process.env.FRONTEND_URL ||
+      process.env.NEXT_PUBLIC_FRONTEND_URL ||
+      process.env.NEXT_PUBLIC_BACKEND_URL;
+
+    if (!resetBaseUrl) {
+      return res.status(500).json({ message: "Reset password URL is not configured" });
+    }
+
+    const resetLink = `${resetBaseUrl}/reset-password?token=${resetToken}`;
     console.log("Reset link:", resetLink);
 
-    await sendEmail(user.email, "Password Reset", `Click here: ${resetLink}`);
+    await sendEmail({
+      to: user.email,
+      subject: "Password Reset",
+      text: `Click here: ${resetLink}`,
+    });
 
-    res.json({ message: "Password reset email sent" });
+    res.json({ message: "If that account exists, a reset email has been sent" });
   } catch (err) {
     console.error("Forgot password error:", err);
     res.status(500).json({ message: err.message });

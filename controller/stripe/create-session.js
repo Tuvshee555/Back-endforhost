@@ -8,7 +8,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 });
 
 const DEFAULT_CURRENCY = process.env.PAYMENT_CURRENCY || "usd";
-const FALLBACK_TO_ORDER_SUMMARY = process.env.FALLBACK_TO_ORDER_SUMMARY === "true"; // set true to bypass missing item prices for quick testing
+const FALLBACK_TO_ORDER_SUMMARY = process.env.FALLBACK_TO_ORDER_SUMMARY === "true";
 
 function toCents(v) {
   const n = Number(v);
@@ -17,23 +17,19 @@ function toCents(v) {
 }
 
 async function findRelatedProductPrice(item) {
-  // Try to detect a foreign key on the item
   const fkCandidates = ["foodId", "food_id", "productId", "product_id", "menuItemId", "menu_item_id"];
   const modelCandidates = ["food", "product", "menuItem", "dish", "item", "Food", "Product"];
 
   for (const fk of fkCandidates) {
     if (typeof item[fk] !== "undefined" && item[fk] !== null) {
       const fkVal = item[fk];
-      // Try querying common model names if they exist in prisma client
       for (const modelName of modelCandidates) {
-        // prisma[modelName] may be undefined if model not present
         if (!prisma[modelName]) continue;
         try {
           const found = await prisma[modelName].findUnique({
             where: { id: fkVal },
           }).catch(() => null);
           if (found) {
-            // attempt to read price from product record
             return {
               price: found.price ?? found.unit_price ?? found.unitPrice ?? found.cost ?? found.amount ?? null,
               name: found.name ?? found.title ?? found.productName ?? null,
@@ -47,7 +43,6 @@ async function findRelatedProductPrice(item) {
     }
   }
 
-  // If item has an embedded relation like item.food?.price
   if (item.food) {
     return {
       price: item.food.price ?? item.food.unit_price ?? item.food.unitPrice ?? null,
@@ -61,14 +56,19 @@ async function findRelatedProductPrice(item) {
 
 export async function createSession(req, res) {
   try {
-    console.log("createSession — raw body:", req.body);
+    console.log("createSession â€” raw body:", req.body);
     const { orderId: rawOrderId, totalPrice } = req.body || {};
+    const requesterId = req.user?.id;
+    const requesterRole = req.user?.role;
+
+    if (!requesterId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
     if (typeof rawOrderId === "undefined" || rawOrderId === null || rawOrderId === "") {
       return res.status(400).json({ error: "Missing orderId in request body", received: req.body });
     }
 
-    // lookup order (try numeric then string)
     const orderIdNum = Number(rawOrderId);
     let order = null;
     if (!Number.isNaN(orderIdNum)) {
@@ -85,8 +85,14 @@ export async function createSession(req, res) {
       });
     }
 
-    // attempt to include items using discovered relation name(s)
-    // We already saw your schema uses 'foodOrderItems' relation — try that first.
+    if (requesterRole !== "ADMIN" && order.userId !== requesterId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (["PAID", "CANCELLED"].includes(order.status)) {
+      return res.status(400).json({ error: "This order cannot be paid" });
+    }
+
     const candidateRelations = ["foodOrderItems", "items", "orderItems", "food_order_items", "foodOrder_item"];
     let items = null;
     for (const rel of candidateRelations) {
@@ -97,7 +103,7 @@ export async function createSession(req, res) {
         }).catch(() => null);
         if (withRel && withRel[rel] && Array.isArray(withRel[rel]) && withRel[rel].length) {
           items = withRel[rel];
-          console.log(`createSession — found items via relation '${rel}'`);
+          console.log(`createSession â€” found items via relation '${rel}'`);
           break;
         }
       } catch (e) {
@@ -105,19 +111,17 @@ export async function createSession(req, res) {
       }
     }
 
-    // if still not loaded, try common item model queries as fallback
     if (!items) {
       const candidateItemModels = ["foodOrderItem", "foodOrderItems", "orderItem", "orderItems", "FoodOrderItem", "FoodOrderItems"];
       for (const modelName of candidateItemModels) {
         if (!prisma[modelName]) continue;
         try {
-          // try common where keys
           const found = await prisma[modelName].findMany({
             where: { foodOrderId: order.id },
           }).catch(() => []);
           if (found && found.length) {
             items = found;
-            console.log(`createSession — found items via model '${modelName}'`);
+            console.log(`createSession â€” found items via model '${modelName}'`);
             break;
           }
         } catch (e) {
@@ -134,12 +138,10 @@ export async function createSession(req, res) {
       });
     }
 
-    // Build Stripe line_items with robust price lookup
     const badItems = [];
     const line_items = [];
 
     for (const it of items) {
-      // detect many possible name/price/qty fields
       const name =
         it.name ??
         it.title ??
@@ -151,7 +153,6 @@ export async function createSession(req, res) {
 
       const qty = Number(it.quantity ?? it.qty ?? it.count ?? 1);
 
-      // try many possible price fields on item
       let priceSource =
         it.price ??
         it.unit_price ??
@@ -162,7 +163,6 @@ export async function createSession(req, res) {
         it.price_mnt_value ??
         null;
 
-      // if item has nested product relation, try that
       if (priceSource == null && (it.food || it.product || it.menuItem)) {
         priceSource =
           it.food?.price ??
@@ -173,7 +173,6 @@ export async function createSession(req, res) {
           null;
       }
 
-      // if still missing, try DB lookup of related product
       if (priceSource == null) {
         const related = await findRelatedProductPrice(it).catch(() => null);
         if (related && related.price != null) {
@@ -197,7 +196,6 @@ export async function createSession(req, res) {
       });
     }
 
-    // If we found bad items and fallback is disabled, return a helpful error with the item objects
     if (badItems.length) {
       if (!FALLBACK_TO_ORDER_SUMMARY) {
         return res.status(400).json({
@@ -209,7 +207,6 @@ export async function createSession(req, res) {
         });
       }
 
-      // fallback: create single order summary item using order.totalPrice or incoming totalPrice
       const fallbackAmount = toCents(order.totalPrice ?? totalPrice ?? 0);
       if (fallbackAmount === null || fallbackAmount <= 0) {
         return res.status(400).json({
@@ -217,7 +214,7 @@ export async function createSession(req, res) {
           problematicItems: badItems,
         });
       }
-      line_items.length = 0; // clear
+      line_items.length = 0;
       line_items.push({
         price_data: {
           currency: DEFAULT_CURRENCY,
@@ -226,10 +223,9 @@ export async function createSession(req, res) {
         },
         quantity: 1,
       });
-      console.log("createSession — using fallback order summary for checkout (FALLBACK_TO_ORDER_SUMMARY=true)");
+      console.log("createSession â€” using fallback order summary for checkout (FALLBACK_TO_ORDER_SUMMARY=true)");
     }
 
-    // Add delivery fee if present on order
     const deliveryCandidates = ["deliveryFee", "delivery_fee", "delivery", "deliveryPrice"];
     for (const key of deliveryCandidates) {
       if (typeof order[key] !== "undefined" && order[key] !== null) {
@@ -252,7 +248,6 @@ export async function createSession(req, res) {
       return res.status(400).json({ error: "No valid line items constructed for Stripe" });
     }
 
-    // Create Stripe session
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -262,7 +257,6 @@ export async function createSession(req, res) {
       cancel_url: `${process.env.STRIPE_CANCEL_URL}?orderId=${encodeURIComponent(order.id)}`,
     });
 
-    // create a Payment record (best effort)
     try {
       await prisma.payment.create({
         data: {
@@ -273,7 +267,7 @@ export async function createSession(req, res) {
         },
       });
     } catch (e) {
-      console.warn("createSession — payment creation failed:", e?.message || e);
+      console.warn("createSession â€” payment creation failed:", e?.message || e);
     }
 
     return res.json({ url: session.url });

@@ -17,18 +17,25 @@ const checkoutLimiter = rateLimit({
 router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
   try {
     const { orderId, variantId, redirectUrl } = req.body;
+    const requesterId = req.user?.id;
+    const requesterRole = req.user?.role;
 
     if (!orderId || !variantId) {
       return res.status(400).json({ message: "orderId and variantId required" });
     }
 
-    // 1) Fetch order (include status so we can block double-pay)
+    if (!requesterId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const order = await prisma.foodOrder.findUnique({
       where: { id: String(orderId) },
       select: {
         id: true,
+        userId: true,
         orderNumber: true,
         totalPrice: true,
+        paymentMethod: true,
         status: true,
         createdAt: true,
         user: { select: { email: true } },
@@ -37,7 +44,14 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // ✅ Block invalid states
+    if (requesterRole !== "ADMIN" && order.userId !== requesterId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (order.paymentMethod !== "LEMON") {
+      return res.status(400).json({ message: "This order is not configured for Lemon checkout" });
+    }
+
     if (order.status === "PAID") {
       return res.status(400).json({ message: "Order already paid" });
     }
@@ -45,7 +59,6 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
       return res.status(400).json({ message: "Order is cancelled" });
     }
 
-    // 2) If checkout already exists and still pending -> reuse it (prevents duplicates)
     const existingPayment = await prisma.lemonPayment.findUnique({
       where: { orderId: order.id },
       select: {
@@ -68,25 +81,16 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
       });
     }
 
-    // 3) Compute total
     const totalMnt = Math.round(Number(order.totalPrice) || 0);
-
-    // Lemon min price MNT 1780
     const safeMnt = Math.max(1780, totalMnt);
-
-    // IMPORTANT: Lemon uses minor units => MNT × 100
     const lemonPrice = safeMnt * 100;
 
-    // 4) Upsert payment row now (webhook mapping + tracking)
     await prisma.lemonPayment.upsert({
       where: { orderId: order.id },
       update: { status: "PENDING" },
       create: { orderId: order.id, status: "PENDING" },
     });
 
-    // 5) Build super-safe Lemon payload
-    // ✅ Keep custom values ONLY strings
-    // ✅ Keep checkout_data as object
     const payload = {
       data: {
         type: "checkouts",
@@ -96,7 +100,6 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
           checkout_data: {
             email: order.user?.email || undefined,
             custom: {
-              // ✅ store identifiers as strings only
               order_id: String(order.id),
               order_number: String(order.orderNumber || ""),
               total_mnt: String(safeMnt),
@@ -111,7 +114,6 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
               `${process.env.FRONTEND_URL}/profile/orders/${order.id}`,
           },
 
-          // Lemon expects array
           checkout_options: [],
 
           test_mode: process.env.LEMON_TEST_MODE === "true",
@@ -128,10 +130,9 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
       },
     };
 
-    // ✅ Idempotency prevents duplicate checkout if double request happens
     const idempotencyKey = `order-${order.id}`;
 
-    console.log("🍋 LEMON checkout request:", {
+    console.log("ðŸ‹ LEMON checkout request:", {
       orderId: order.id,
       orderNumber: order.orderNumber,
       totalMnt: safeMnt,
@@ -140,7 +141,6 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
       idempotencyKey,
     });
 
-    // 6) Call Lemon
     const apiRes = await axios.post(
       "https://api.lemonsqueezy.com/v1/checkouts",
       payload,
@@ -163,12 +163,11 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
       return res.status(500).json({ message: "Failed to create checkout" });
     }
 
-    // 7) Save checkout info for reuse + webhook mapping
     await prisma.lemonPayment.update({
       where: { orderId: order.id },
       data: {
         checkoutId,
-        checkoutUrl, // ✅ IMPORTANT (allows reuse)
+        checkoutUrl,
         status: "PENDING",
       },
     });
@@ -177,16 +176,14 @@ router.post("/checkout", requireAuth, checkoutLimiter, async (req, res) => {
       checkoutUrl,
       checkoutId,
       reused: false,
-
-      // ✅ extra info for frontend/debug
       orderId: order.id,
       orderNumber: order.orderNumber,
       totalMnt: safeMnt,
       lemonPrice,
     });
   } catch (err) {
-    console.error("❌ LEMON CHECKOUT ERROR STATUS:", err?.response?.status);
-    console.error("❌ LEMON CHECKOUT ERROR DATA:", err?.response?.data || err);
+    console.error("âŒ LEMON CHECKOUT ERROR STATUS:", err?.response?.status);
+    console.error("âŒ LEMON CHECKOUT ERROR DATA:", err?.response?.data || err);
 
     return res.status(500).json({
       message: "Failed to create checkout",

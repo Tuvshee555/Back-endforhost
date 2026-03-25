@@ -1,6 +1,7 @@
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "../../prismaClient.js";
 import jwt from "jsonwebtoken";
+import { USER_PUBLIC_SELECT } from "../../utils/serializeUser.js";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -24,7 +25,10 @@ export const googleAuth = async (req, res) => {
     console.log("Google normalized email:", email);
 
     // 🔥 Now Google login and OTP login use SAME identity
-    let user = await prisma.user.findUnique({ where: { email } });
+    let user = await prisma.user.findUnique({
+      where: { email },
+      select: USER_PUBLIC_SELECT,
+    });
 
     if (!user) {
       user = await prisma.user.create({
@@ -32,11 +36,12 @@ export const googleAuth = async (req, res) => {
           email,
           role: "USER",
         },
+        select: USER_PUBLIC_SELECT,
       });
     }
 
     const jwtToken = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "21d" }
     );

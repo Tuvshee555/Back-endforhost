@@ -2,6 +2,7 @@
 import { prisma } from "../../prismaClient.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { USER_PUBLIC_SELECT } from "../../utils/serializeUser.js";
 
 export const createGuestUser = async (req, res) => {
   try {
@@ -16,12 +17,17 @@ export const createGuestUser = async (req, res) => {
         email: `guest-${guestId}@guest.com`,
         role: "USER",
       },
+      select: USER_PUBLIC_SELECT,
     });
 
     // Sign a JWT using the same secret you use elsewhere
-    const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
-      expiresIn: "14d",
-    });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "14d",
+      }
+    );
 
     return res.json({ success: true, token, user });
   } catch (err) {

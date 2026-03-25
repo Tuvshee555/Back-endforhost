@@ -16,6 +16,12 @@ const ALLOWED_TRANSITIONS = {
   CANCELLED: [],
 };
 
+const CUSTOMER_EDITABLE_STATUSES = new Set([
+  "PENDING",
+  "WAITING_PAYMENT",
+  "COD_PENDING",
+]);
+
 export const updatedFoodOrder = async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ message: "Order ID required" });
@@ -33,6 +39,13 @@ export const updatedFoodOrder = async (req, res) => {
   } = req.body;
 
   try {
+    const requesterId = req.user?.id;
+    const requesterRole = req.user?.role;
+
+    if (!requesterId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const existing = await prisma.foodOrder.findUnique({
       where: { id },
       include: {
@@ -44,14 +57,42 @@ export const updatedFoodOrder = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    /* -------------------------------------------------- */
-    /* 🔒 STATUS TRANSITION GUARD                          */
-    /* -------------------------------------------------- */
+    const hasDeliveryUpdate = [
+      firstName,
+      lastName,
+      phone,
+      city,
+      district,
+      khoroo,
+      address,
+      notes,
+    ].some((value) => value !== undefined);
+
+    if (requesterRole !== "ADMIN" && existing.userId !== requesterId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (requesterRole !== "ADMIN") {
+      if (status !== undefined) {
+        return res.status(403).json({ message: "Only admins can change order status" });
+      }
+
+      if (!CUSTOMER_EDITABLE_STATUSES.has(existing.status)) {
+        return res.status(409).json({
+          message: "This order can no longer be edited by the customer",
+        });
+      }
+    }
+
+    if (status === undefined && !hasDeliveryUpdate) {
+      return res.status(400).json({ message: "No valid fields provided to update" });
+    }
+
     if (status) {
       const allowed = ALLOWED_TRANSITIONS[existing.status] || [];
       if (!allowed.includes(status)) {
         return res.status(400).json({
-          message: `Invalid status transition: ${existing.status} → ${status}`,
+          message: `Invalid status transition: ${existing.status} â†’ ${status}`,
         });
       }
     }
@@ -81,18 +122,8 @@ export const updatedFoodOrder = async (req, res) => {
     const oldStatus = existing.status;
     const newStatus = updated.status;
 
-    console.log("STATUS CHANGE:", oldStatus, "→", newStatus);
+    console.log("STATUS CHANGE:", oldStatus, "â†’", newStatus);
 
-    /* -------------------------------------------------- */
-    /* 🟢 SALES COUNT (CORRECT + SAFE)                     */
-    /* -------------------------------------------------- */
-    /**
-     * ✅ Count sales ONLY when order ENTERS PAID
-     * This guarantees:
-     * - No double counting
-     * - Works for QPay / BANK / manual admin
-     * - Bestseller works correctly
-     */
     const shouldCountSale =
       status &&
       oldStatus !== "PAID" &&
@@ -112,17 +143,14 @@ export const updatedFoodOrder = async (req, res) => {
         }
 
         console.log(
-          "📈 Sales count incremented for order:",
+          "ðŸ“ˆ Sales count incremented for order:",
           updated.orderNumber
         );
       } catch (salesErr) {
-        console.error("❌ Failed to increment salesCount:", salesErr);
+        console.error("âŒ Failed to increment salesCount:", salesErr);
       }
     }
 
-    /* -------------------------------------------------- */
-    /* 🔔 TELEGRAM NOTIFICATIONS                           */
-    /* -------------------------------------------------- */
     const IMPORTANT = new Set([
       "PAID",
       "CANCELLED",
@@ -136,13 +164,10 @@ export const updatedFoodOrder = async (req, res) => {
           formatOrderStatusMessage(updated, oldStatus, newStatus)
         );
       } catch (tgErr) {
-        console.error("❌ Telegram notify failed:", tgErr);
+        console.error("âŒ Telegram notify failed:", tgErr);
       }
     }
 
-    /* -------------------------------------------------- */
-    /* 📧 CUSTOMER EMAILS                                 */
-    /* -------------------------------------------------- */
     const EMAIL_STATUSES = new Set([
       "DELIVERING",
       "DELIVERED",
@@ -161,10 +186,10 @@ export const updatedFoodOrder = async (req, res) => {
             to: user.email,
             subject:
               newStatus === "DELIVERING"
-                ? `🚚 Захиалга замдаа явж байна #${updated.orderNumber}`
+                ? `ðŸšš Ð—Ð°Ñ…Ð¸Ð°Ð»Ð³Ð° Ð·Ð°Ð¼Ð´Ð°Ð° ÑÐ²Ð¶ Ð±Ð°Ð¹Ð½Ð° #${updated.orderNumber}`
                 : newStatus === "DELIVERED"
-                ? `🏁 Захиалга хүргэгдлээ #${updated.orderNumber}`
-                : `❌ Захиалга цуцлагдлаа #${updated.orderNumber}`,
+                ? `ðŸ Ð—Ð°Ñ…Ð¸Ð°Ð»Ð³Ð° Ñ…Ò¯Ñ€Ð³ÑÐ³Ð´Ð»ÑÑ #${updated.orderNumber}`
+                : `âŒ Ð—Ð°Ñ…Ð¸Ð°Ð»Ð³Ð° Ñ†ÑƒÑ†Ð»Ð°Ð³Ð´Ð»Ð°Ð° #${updated.orderNumber}`,
             html: orderStatusChangedEmail(
               updated,
               oldStatus,
@@ -173,11 +198,9 @@ export const updatedFoodOrder = async (req, res) => {
           });
         }
       } catch (mailErr) {
-        console.error("❌ Customer email failed:", mailErr);
+        console.error("âŒ Customer email failed:", mailErr);
       }
     }
-
-    /* -------------------------------------------------- */
 
     return res.status(200).json({
       id: updated.id,

@@ -6,7 +6,7 @@ import { prisma } from "../../prismaClient.js";
  * {
  *   success: true,
  *   category: { id, categoryName },
- *   foods: Food[] (with persisted salesCount)
+ *   foods: Food[]
  * }
  */
 export const getCategoryFoodsTree = async (req, res) => {
@@ -20,7 +20,6 @@ export const getCategoryFoodsTree = async (req, res) => {
   }
 
   try {
-    // 1️⃣ Load all categories
     const categories = await prisma.category.findMany({
       select: {
         id: true,
@@ -38,49 +37,24 @@ export const getCategoryFoodsTree = async (req, res) => {
       });
     }
 
-    // 2️⃣ Collect descendant category IDs (BFS)
     const allIds = new Set([target.id]);
     const queue = [target.id];
 
     while (queue.length > 0) {
       const currentId = queue.shift();
-      for (const c of categories) {
-        if (c.parentId === currentId && !allIds.has(c.id)) {
-          allIds.add(c.id);
-          queue.push(c.id);
+      for (const category of categories) {
+        if (category.parentId === currentId && !allIds.has(category.id)) {
+          allIds.add(category.id);
+          queue.push(category.id);
         }
       }
     }
 
-    const idList = Array.from(allIds);
-
-    // 3️⃣ Fetch foods in this category tree
     const foods = await prisma.food.findMany({
       where: {
         categoryId: {
-          in: idList,
+          in: Array.from(allIds),
         },
-      },
-      select: {
-        id: true,
-        foodName: true,
-        price: true,
-        image: true,
-        address: true,
-        ingredients: true,
-        categoryId: true,
-        createdAt: true,
-        extraImages: true,
-        updatedAt: true,
-        video: true,
-        isFeatured: true,
-        salesCount: true,
-        oldPrice: true,
-        discount: true,
-        avgRating: true,
-        reviewCount: true,
-        sizes: true,
-        category: true,
       },
       orderBy: {
         createdAt: "desc",

@@ -21,20 +21,14 @@ export const createFoodOrder = async (req, res) => {
       khoroo,
       address,
       notes,
-      idempotencyKey, // ✅ from frontend (prevents double order if you add backend logic later)
     } = req.body;
 
     const items = req.body.items ?? req.body.normalizedItems;
 
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-   if (!paymentMethod || !["COD", "BANK", "QPAY", "LEMON"].includes(paymentMethod)) {
-  return res.status(400).json({ message: "Invalid payment method" });
-}
-
-
-    if (typeof totalPrice === "undefined" || Number.isNaN(Number(totalPrice))) {
-      return res.status(400).json({ message: "Invalid total price" });
+    if (!paymentMethod || !["COD", "BANK", "QPAY", "LEMON"].includes(paymentMethod)) {
+      return res.status(400).json({ message: "Invalid payment method" });
     }
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -44,11 +38,10 @@ export const createFoodOrder = async (req, res) => {
     const safe = (v) =>
       typeof v === "string" && v.trim().length ? v.trim() : null;
 
-    // ✅ normalize items
     const normalizedItems = items
       .map((i) => ({
         foodId: typeof i.foodId === "string" ? i.foodId : null,
-        quantity: Number(i.quantity) || 0,
+        quantity: Number.parseInt(i.quantity, 10) || 0,
       }))
       .filter((i) => i.foodId && i.quantity > 0);
 
@@ -56,15 +49,47 @@ export const createFoodOrder = async (req, res) => {
       return res.status(400).json({ message: "No valid items" });
     }
 
-    // ✅ validate food ids exist (minimal select)
     const foodIds = [...new Set(normalizedItems.map((i) => i.foodId))];
     const foods = await prisma.food.findMany({
       where: { id: { in: foodIds } },
-      select: { id: true },
+      select: { id: true, price: true },
     });
 
     if (foods.length !== foodIds.length) {
       return res.status(400).json({ message: "Some foods no longer exist" });
+    }
+
+    const foodPriceMap = new Map(
+      foods.map((food) => [food.id, Number(food.price ?? 0)])
+    );
+
+    const computedTotalPrice = Number(
+      normalizedItems
+        .reduce(
+          (sum, item) =>
+            sum + (foodPriceMap.get(item.foodId) ?? 0) * item.quantity,
+          0
+        )
+        .toFixed(2)
+    );
+
+    if (computedTotalPrice <= 0) {
+      return res.status(400).json({ message: "Order total must be greater than zero" });
+    }
+
+    const requestedTotalPrice = Number(totalPrice);
+    if (
+      typeof totalPrice !== "undefined" &&
+      totalPrice !== null &&
+      totalPrice !== "" &&
+      Number.isFinite(requestedTotalPrice) &&
+      Math.abs(requestedTotalPrice - computedTotalPrice) > 0.01
+    ) {
+      console.warn("CREATE ORDER WARNING: client/server total mismatch", {
+        userId,
+        requestedTotalPrice,
+        computedTotalPrice,
+      });
     }
 
     const status =
@@ -72,12 +97,11 @@ export const createFoodOrder = async (req, res) => {
 
     const orderNumber = generateOrderNumber();
 
-    // ✅ FAST create: NO include here (big perf gain)
     const order = await prisma.foodOrder.create({
       data: {
         userId,
         orderNumber,
-        totalPrice: Number(totalPrice),
+        totalPrice: computedTotalPrice,
         paymentMethod,
         status,
 
@@ -104,7 +128,6 @@ export const createFoodOrder = async (req, res) => {
       },
     });
 
-    // ✅ RESPOND IMMEDIATELY (user sees fast checkout)
     res.status(201).json({
       orderId: order.id,
       orderNumber: order.orderNumber,
@@ -113,9 +136,6 @@ export const createFoodOrder = async (req, res) => {
       totalPrice: order.totalPrice,
     });
 
-    // --------------------------------------------
-    // ✅ BACKGROUND WORK (DO NOT BLOCK RESPONSE)
-    // --------------------------------------------
     setImmediate(async () => {
       try {
         const fullOrder = await prisma.foodOrder.findUnique({
@@ -130,20 +150,18 @@ export const createFoodOrder = async (req, res) => {
 
         if (!fullOrder) return;
 
-        // ✅ Telegram (no await blocking request)
         sendTelegramMessage(formatOrderMessage(fullOrder)).catch(() => {});
 
-        // ✅ Email customer if exists
         const customerEmail = fullOrder.user?.email;
         if (customerEmail) {
           sendEmail({
             to: customerEmail,
-            subject: `✅ Захиалга хүлээн авлаа #${fullOrder.orderNumber}`,
+            subject: `âœ… Ð—Ð°Ñ…Ð¸Ð°Ð»Ð³Ð° Ñ…Ò¯Ð»ÑÑÐ½ Ð°Ð²Ð»Ð°Ð° #${fullOrder.orderNumber}`,
             html: orderCreatedEmail(fullOrder),
           }).catch(() => {});
         }
       } catch (bgErr) {
-        console.error("❌ Background notify failed:", bgErr);
+        console.error("âŒ Background notify failed:", bgErr);
       }
     });
   } catch (err) {
