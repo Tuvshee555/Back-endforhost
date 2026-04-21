@@ -24,7 +24,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-/* ---------------- REQUIRED ENV CHECKS ---------------- */
 if (!process.env.JWT_SECRET) {
   console.error("Missing JWT_SECRET. Set it in your environment.");
   process.exit(1);
@@ -32,10 +31,7 @@ if (!process.env.JWT_SECRET) {
 if (!process.env.STRIPE_WEBHOOK_SECRET) {
   console.warn("Warning: STRIPE_WEBHOOK_SECRET not set. Stripe webhooks will fail verification.");
 }
-if (!process.env.QPAY_WEBHOOK_SECRET) {
-  console.warn("Warning: QPAY_WEBHOOK_SECRET not set. QPay webhook signatures will not be verified.");
-}
-/* ---------------- CORS ---------------- */
+
 app.use(
   cors({
     origin: [
@@ -54,28 +50,21 @@ app.use(
 
 app.options("*", cors());
 
-/* ---------------- STRIPE ROUTES FIRST (raw body) ---------------- */
 app.use("/stripe", stripeRouter);
 
-/* ---------------- BODY PARSERS ---------------- */
-/* JSON with raw buffer capture for webhook verification */
 app.use(express.json({
   limit: "10mb",
   verify: (req, res, buf) => {
-    // store raw buffer for webhook signature verification
     req.rawBody = buf;
   },
 }));
 
-/* REQUIRED for multipart/form-data (multer) */
 app.use(express.urlencoded({ extended: true }));
 
-/* ---------------- HEALTH ---------------- */
 app.get("/", (_, res) => {
-  res.send("🚀 Backend Running");
+  res.send("ðŸš€ Backend Running");
 });
 
-/* ---------------- ROUTES ---------------- */
 app.use("/food", foodRouter);
 app.use("/order", orderRouter);
 app.use("/user", userRouter);
@@ -88,38 +77,31 @@ app.use("/upload", uploadRouter);
 app.use("/review", reviewRouter);
 app.use("/ai", aiRouter);
 
-
-/* lemon checkout route (create checkout) */
 app.use("/payment/lemon", lemonRouter);
-
-/* webhook receiver (rawBody available via req.rawBody) */
 app.use("/webhook/lemon-squeezy", lemonWebhookRouter);
 
-/* ---------------- ERROR HANDLER ---------------- */
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR:", err);
   res.status(500).json({ message: "Internal server error" });
 });
 
-/* ---------------- SERVER ---------------- */
 const startServer = async () => {
   try {
     await connectPrismaWithRetry();
-    console.log("✅ Database connected");
+    console.log("âœ… Database connected");
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`ðŸš€ Server running on port ${PORT}`);
     });
 
-    // Expire unpaid QPay orders every 5 minutes only after DB is ready.
     setInterval(expireUnpaidOrders, 5 * 60 * 1000);
   } catch (error) {
-    console.error("❌ Failed to connect to PostgreSQL.");
+    console.error("âŒ Failed to connect to PostgreSQL.");
     console.error(
-      "Check DATABASE_URL in .env and make sure it matches the current Render database URL."
+      "Check DATABASE_URL in .env and make sure it matches your current PostgreSQL provider."
     );
     console.error(
-      "If you are running locally, use the External Database URL from Render. If this backend is deployed on Render, use the Internal Database URL."
+      "If you are using Neon or another hosted Postgres provider, verify the host, password, database name, and SSL settings."
     );
     console.error("Startup error:", error.message);
     process.exit(1);
