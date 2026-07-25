@@ -1,5 +1,6 @@
 // controller/categories/create-categories.js
 import { prisma } from "../../prismaClient.js";
+import { invalidateCatalog } from "../../utils/cache.js";
 
 // CREATE CATEGORY (optionally with parentId)
 export const createCategories = async (req, res) => {
@@ -55,6 +56,8 @@ export const createCategories = async (req, res) => {
       childrenCount: c._count.children,
       hasChildren: c._count.children > 0,
     }));
+
+    invalidateCatalog();
 
     res.status(200).json(mapped);
   } catch (error) {

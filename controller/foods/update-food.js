@@ -1,6 +1,7 @@
 // controller/foods/update-food.js
 import { prisma } from "../../prismaClient.js";
 import { normalizeSizeInput } from "../../utils/sizes.js";
+import { invalidateCatalog } from "../../utils/cache.js";
 
 export const updateFood = async (req, res) => {
   const { id } = req.params;
@@ -126,6 +127,8 @@ export const updateFood = async (req, res) => {
         sizes: true,
       },
     });
+
+    invalidateCatalog();
 
     return res.json(updatedFood);
   } catch (error) {

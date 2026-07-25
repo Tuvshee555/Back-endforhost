@@ -1,5 +1,6 @@
 // controller/categories/update-categories.js
 import { prisma } from "../../prismaClient.js";
+import { invalidateCatalog } from "../../utils/cache.js";
 
 export const updateCategories = async (req, res) => {
   const { id, categoryName, parentId } = req.body;
@@ -33,6 +34,8 @@ export const updateCategories = async (req, res) => {
       where: { id },
       data,
     });
+
+    invalidateCatalog();
 
     res.status(200).json({ success: true, category: updatedCategory });
   } catch (error) {

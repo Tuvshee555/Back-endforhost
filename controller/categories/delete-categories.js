@@ -1,4 +1,5 @@
 import { prisma } from "../../prismaClient.js";
+import { invalidateCatalog } from "../../utils/cache.js";
 
 export const deleteCategories = async (req, res) => {
   const { id } = req.body; // Use 'id' instead of '_id' for clarity
@@ -11,6 +12,8 @@ export const deleteCategories = async (req, res) => {
     await prisma.category.delete({
       where: { id },
     });
+
+    invalidateCatalog();
 
     res
       .status(200)

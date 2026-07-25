@@ -1,4 +1,5 @@
 import { prisma } from "../../prismaClient.js";
+import { cached } from "../../utils/cache.js";
 
 /**
  * GET /category/:id/foods-tree
@@ -20,55 +21,60 @@ export const getCategoryFoodsTree = async (req, res) => {
   }
 
   try {
-    const categories = await prisma.category.findMany({
-      select: {
-        id: true,
-        parentId: true,
-        categoryName: true,
-      },
+    const payload = await cached(`categories:foodsTree:${id}`, 20_000, async () => {
+      const categories = await prisma.category.findMany({
+        select: {
+          id: true,
+          parentId: true,
+          categoryName: true,
+        },
+      });
+
+      const target = categories.find((c) => c.id === id);
+      if (!target) return { notFound: true };
+
+      const allIds = new Set([target.id]);
+      const queue = [target.id];
+
+      while (queue.length > 0) {
+        const currentId = queue.shift();
+        for (const category of categories) {
+          if (category.parentId === currentId && !allIds.has(category.id)) {
+            allIds.add(category.id);
+            queue.push(category.id);
+          }
+        }
+      }
+
+      const foods = await prisma.food.findMany({
+        where: {
+          categoryId: {
+            in: Array.from(allIds),
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      return {
+        success: true,
+        category: {
+          id: target.id,
+          categoryName: target.categoryName,
+        },
+        foods,
+      };
     });
 
-    const target = categories.find((c) => c.id === id);
-
-    if (!target) {
+    if (payload.notFound) {
       return res.status(404).json({
         success: false,
         message: "Category not found",
       });
     }
 
-    const allIds = new Set([target.id]);
-    const queue = [target.id];
-
-    while (queue.length > 0) {
-      const currentId = queue.shift();
-      for (const category of categories) {
-        if (category.parentId === currentId && !allIds.has(category.id)) {
-          allIds.add(category.id);
-          queue.push(category.id);
-        }
-      }
-    }
-
-    const foods = await prisma.food.findMany({
-      where: {
-        categoryId: {
-          in: Array.from(allIds),
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    return res.status(200).json({
-      success: true,
-      category: {
-        id: target.id,
-        categoryName: target.categoryName,
-      },
-      foods,
-    });
+    return res.status(200).json(payload);
   } catch (error) {
     console.error("Error in getCategoryFoodsTree:", error);
     return res.status(500).json({

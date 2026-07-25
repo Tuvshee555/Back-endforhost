@@ -1,16 +1,19 @@
 import { prisma } from "../../prismaClient.js";
+import { cached } from "../../utils/cache.js";
 
 export const getFood = async (req, res) => {
   try {
-    const foods = await prisma.food.findMany({
-      include: {
-        category: true,
-        sizes: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+    const foods = await cached("foods:all", 20_000, () =>
+      prisma.food.findMany({
+        include: {
+          category: true,
+          sizes: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      })
+    );
 
     return res.status(200).json(foods);
   } catch (err) {

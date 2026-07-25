@@ -4,6 +4,7 @@ dotenv.config();
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "../utils/prisma.js";
+import { cached } from "../utils/cache.js";
 
 const GEN_MODEL = process.env.GEN_MODEL || "gemini-2.5-flash";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -43,18 +44,21 @@ export async function aiChat(req, res) {
       return res.status(400).json({ message: "message is required" });
     }
 
-    // fetch a small set of foods (tune limit if needed)
-    const foods = await prisma.food.findMany({
-      take: 50,
-      select: {
-        id: true,
-        foodName: true,
-        price: true,
-        image: true,
-        ingredients: true,
-        category: { select: { categoryName: true } },
-      },
-    });
+    // fetch a small set of foods (cached — the catalog rarely changes and this
+    // runs on every chat message)
+    const foods = await cached("foods:ai", 30_000, () =>
+      prisma.food.findMany({
+        take: 50,
+        select: {
+          id: true,
+          foodName: true,
+          price: true,
+          image: true,
+          ingredients: true,
+          category: { select: { categoryName: true } },
+        },
+      })
+    );
 
     // UPGRADE 2: instant direct name search (very fast and accurate)
     const directMatches = foods.filter((f) =>

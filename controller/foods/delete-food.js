@@ -1,4 +1,5 @@
 import { prisma } from "../../prismaClient.js";
+import { invalidateCatalog } from "../../utils/cache.js";
 
 // 🧩 Delete single food by ID
 export const deleteFood = async (req, res) => {
@@ -19,6 +20,8 @@ export const deleteFood = async (req, res) => {
     await prisma.food.delete({
       where: { id },
     });
+
+    invalidateCatalog();
 
     res.status(200).json({ success: true, message: "Successfully deleted food" });
   } catch (error) {
