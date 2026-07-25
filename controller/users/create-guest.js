@@ -22,7 +22,7 @@ export const createGuestUser = async (req, res) => {
 
     // Sign a JWT using the same secret you use elsewhere
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, type: "access" },
       process.env.JWT_SECRET,
       {
         expiresIn: "14d",

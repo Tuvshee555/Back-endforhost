@@ -14,6 +14,8 @@ const toOrderDto = (order) => ({
   status: order.status,
   paymentMethod: order.paymentMethod,
   totalPrice: order.totalPrice,
+  deliveryFee: order.deliveryFee,
+  deliveryZone: order.deliveryZone,
   createdAt: order.createdAt,
   updatedAt: order.updatedAt,
   firstName: order.firstName,
@@ -34,6 +36,7 @@ const toOrderDto = (order) => ({
   foodOrderItems: (order.foodOrderItems ?? []).map((item) => ({
     id: item.id,
     quantity: item.quantity,
+    size: item.size,
     food: item.food
       ? {
           id: item.food.id,

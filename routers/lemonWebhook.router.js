@@ -2,6 +2,8 @@
 import { Router } from "express";
 import crypto from "node:crypto";
 import { prisma } from "../prismaClient.js";
+import { incrementSalesForOrder } from "../utils/orderPaid.js";
+import { restockOrder } from "../utils/stock.js";
 
 const router = Router();
 
@@ -103,6 +105,20 @@ router.post("/", async (req, res) => {
     ]);
 
     if (PAID_EVENTS.has(eventName)) {
+      // Check the current status first so duplicate paid events
+      // (e.g. order_created + order_paid) don't double-count the sale.
+      const current = await prisma.foodOrder.findUnique({
+        where: { id: internalOrderId },
+        select: { status: true },
+      });
+
+      if (!current) {
+        console.warn("⚠️ Lemon paid event for unknown order:", internalOrderId);
+        return res.status(200).json({ received: true, skipped: true });
+      }
+
+      const wasPaid = current.status === "PAID";
+
       // update Order
       await prisma.foodOrder.update({
         where: { id: internalOrderId },
@@ -123,8 +139,22 @@ router.post("/", async (req, res) => {
         },
       });
 
+      // Count the sale only on the first PAID transition.
+      if (!wasPaid) {
+        try {
+          await incrementSalesForOrder(internalOrderId);
+        } catch (salesErr) {
+          console.error("❌ Failed to increment salesCount (lemon):", salesErr);
+        }
+      }
+
       console.log("✅ ORDER UPDATED TO PAID:", internalOrderId);
     } else if (REFUND_EVENTS.has(eventName)) {
+      const current = await prisma.foodOrder.findUnique({
+        where: { id: internalOrderId },
+        select: { status: true },
+      });
+
       await prisma.foodOrder.update({
         where: { id: internalOrderId },
         data: { status: "CANCELLED" },
@@ -134,6 +164,11 @@ router.post("/", async (req, res) => {
         where: { orderId: internalOrderId },
         data: { status: "REFUNDED" },
       });
+
+      // Release reserved stock once (skip if already cancelled).
+      if (current && current.status !== "CANCELLED") {
+        await restockOrder(internalOrderId);
+      }
 
       console.log("✅ ORDER UPDATED TO CANCELLED/REFUNDED:", internalOrderId);
     } else {

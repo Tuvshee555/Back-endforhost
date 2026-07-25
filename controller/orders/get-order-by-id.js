@@ -55,6 +55,8 @@ export const getOrderById = async (req, res) => {
       status: order.status,
       paymentMethod: order.paymentMethod,
       totalPrice: order.totalPrice,
+      deliveryFee: order.deliveryFee,
+      deliveryZone: order.deliveryZone,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
 
@@ -72,6 +74,7 @@ export const getOrderById = async (req, res) => {
       items: order.foodOrderItems.map((item) => ({
         id: item.id,
         quantity: item.quantity,
+        size: item.size,
         food: {
           id: item.food.id,
           foodName: item.food.foodName,

@@ -1,5 +1,6 @@
 // controller/foods/update-food.js
 import { prisma } from "../../prismaClient.js";
+import { normalizeSizeInput } from "../../utils/sizes.js";
 
 export const updateFood = async (req, res) => {
   const { id } = req.params;
@@ -89,11 +90,31 @@ export const updateFood = async (req, res) => {
       salesCount: typeof salesCount === "number" ? salesCount : undefined,
     };
 
-    // sizes: replace sizes if provided
+    // sizes: replace sizes if provided, but PRESERVE existing stock for a size
+    // whose stock isn't part of this edit (the label-only admin form must not
+    // silently wipe inventory when re-saving a food).
     if (sizes && Array.isArray(sizes)) {
+      const incoming = normalizeSizeInput(sizes);
+
+      const existingSizes = await prisma.foodSize.findMany({
+        where: { foodId: id },
+        select: { label: true, stock: true },
+      });
+      const priorStock = new Map(existingSizes.map((s) => [s.label, s.stock]));
+
+      const merged = incoming.map((s) => ({
+        label: s.label,
+        stock:
+          s.stock !== null
+            ? s.stock
+            : priorStock.has(s.label)
+            ? priorStock.get(s.label)
+            : null,
+      }));
+
       updateData.sizes = {
         deleteMany: {},
-        create: sizes.map((label) => ({ label })),
+        create: merged,
       };
     }
 

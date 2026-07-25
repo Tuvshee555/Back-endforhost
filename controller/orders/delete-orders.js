@@ -1,5 +1,6 @@
 // controller/orders/delete-orders.js
 import { prisma } from "../../prismaClient.js";
+import { restockOrder } from "../../utils/stock.js";
 
 export const deleteFoodOrder = async (req, res) => {
   const { id } = req.body;
@@ -28,6 +29,12 @@ export const deleteFoodOrder = async (req, res) => {
       return res.status(400).json({
         message: "Cannot delete paid or delivered orders. Cancel instead.",
       });
+    }
+
+    // Release reserved stock — but only if it wasn't already released when the
+    // order was cancelled (avoids double-restocking a CANCELLED order).
+    if (order.status !== "CANCELLED") {
+      await restockOrder(id);
     }
 
     await prisma.$transaction([

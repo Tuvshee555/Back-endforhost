@@ -33,6 +33,8 @@ export const getOrdersByUser = async (req, res) => {
         status: true,
         paymentMethod: true,
         totalPrice: true,
+        deliveryFee: true,
+        deliveryZone: true,
         createdAt: true,
         updatedAt: true,
 

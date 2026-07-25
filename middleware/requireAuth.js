@@ -20,6 +20,13 @@ export const requireAuth = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // Reject non-access tokens (e.g. password-reset tokens) so a reset link
+    // — which travels through email, browser history and Referer headers —
+    // can never be replayed as an API credential.
+    if (decoded?.type && decoded.type !== "access") {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
     // Accept several common claim names so tokens from different flows work.
     const userId =
       decoded?.id ??

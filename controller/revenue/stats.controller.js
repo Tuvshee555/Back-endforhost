@@ -9,26 +9,27 @@ export const getRevenueStats = async (req, res) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(now.getDate() - 6);
 
-    const totalRevenue = await prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: { status: "PAID" },
-    });
-
-    const monthlyRevenue = await prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: {
-        status: "PAID",
-        createdAt: { gte: startOfMonth },
-      },
-    });
-
-    const weeklyRevenue = await prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: {
-        status: "PAID",
-        createdAt: { gte: sevenDaysAgo },
-      },
-    });
+    // Run the three aggregates in parallel instead of one-after-another.
+    const [totalRevenue, monthlyRevenue, weeklyRevenue] = await Promise.all([
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: { status: "PAID" },
+      }),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: {
+          status: "PAID",
+          createdAt: { gte: startOfMonth },
+        },
+      }),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: {
+          status: "PAID",
+          createdAt: { gte: sevenDaysAgo },
+        },
+      }),
+    ]);
 
     res.json({
       totalRevenue: totalRevenue._sum.amount || 0,

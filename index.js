@@ -13,6 +13,7 @@ import { emailRouter } from "./routers/email.routes.js";
 import stripeRouter from "./routers/stripe.router.js";
 import uploadRouter from "./routers/upload.router.js";
 import { expireUnpaidOrders } from "./jobs/expireOrders.js";
+import { cleanupGuestUsers } from "./jobs/cleanupGuests.js";
 import lemonWebhookRouter from "./routers/lemonWebhook.router.js";
 import lemonRouter from "./routers/lemon.router.js";
 import { reviewRouter } from "./routers/review.router.js";
@@ -21,8 +22,39 @@ import { connectPrismaWithRetry } from "./utils/prisma.js";
 
 dotenv.config();
 
+// Optional hardening/perf middleware, loaded defensively so the server still
+// boots if the deps aren't installed yet (run `npm install` to enable them).
+let compression = null;
+let helmet = null;
+try {
+  ({ default: compression } = await import("compression"));
+} catch {
+  console.warn("compression not installed — run `npm install` to enable gzip.");
+}
+try {
+  ({ default: helmet } = await import("helmet"));
+} catch {
+  console.warn("helmet not installed — run `npm install` to enable security headers.");
+}
+
 const app = express();
 const PORT = process.env.PORT || 4000;
+
+if (helmet) {
+  // JSON API consumed cross-origin by the storefront/admin: keep the safe
+  // headers but disable the policies that would block those cross-origin apps.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+}
+
+if (compression) {
+  app.use(compression());
+}
 
 if (!process.env.JWT_SECRET) {
   console.error("Missing JWT_SECRET. Set it in your environment.");
@@ -95,6 +127,10 @@ const startServer = async () => {
     });
 
     setInterval(expireUnpaidOrders, 5 * 60 * 1000);
+
+    // Purge stale guest accounts once a day (and shortly after boot).
+    setTimeout(cleanupGuestUsers, 60 * 1000);
+    setInterval(cleanupGuestUsers, 24 * 60 * 60 * 1000);
   } catch (error) {
     console.error("âŒ Failed to connect to PostgreSQL.");
     console.error(

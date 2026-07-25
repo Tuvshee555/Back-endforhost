@@ -1,8 +1,8 @@
 // controller/stripe/webhook.js
 import Stripe from "stripe";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../../prismaClient.js";
+import { incrementSalesForOrder } from "../../utils/orderPaid.js";
 
-const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
 
 export async function webhookHandler(req, res) {
@@ -31,11 +31,27 @@ export async function webhookHandler(req, res) {
         data: { status: "PAID" },
       });
 
-      // Update the related FoodOrder to reflect payment (adapt to your model)
-      await prisma.foodOrder.updateMany({
-        where: { id: orderId },
-        data: { status: "PAID" },
-      });
+      // Update the related FoodOrder, counting the sale only on the first
+      // PAID transition so a replayed webhook can't double-count.
+      if (orderId) {
+        const current = await prisma.foodOrder.findUnique({
+          where: { id: orderId },
+          select: { status: true },
+        });
+
+        if (current && current.status !== "PAID") {
+          await prisma.foodOrder.update({
+            where: { id: orderId },
+            data: { status: "PAID" },
+          });
+
+          try {
+            await incrementSalesForOrder(orderId);
+          } catch (salesErr) {
+            console.error("Stripe: failed to increment salesCount:", salesErr);
+          }
+        }
+      }
 
       console.log(`Stripe: session ${sessionId} completed, order ${orderId} marked PAID.`);
     } catch (e) {

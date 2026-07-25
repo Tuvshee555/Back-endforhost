@@ -1,5 +1,6 @@
 // controller/foods/create-food.js
 import { prisma } from "../../prismaClient.js";
+import { normalizeSizeInput } from "../../utils/sizes.js";
 
 export const createFood = async (req, res) => {
   try {
@@ -77,7 +78,7 @@ export const createFood = async (req, res) => {
         isFeatured: Boolean(isFeatured),
         extraImages: Array.isArray(extraImages) ? extraImages : [],
         sizes: {
-          create: (sizes || []).map((label) => ({ label })),
+          create: normalizeSizeInput(sizes),
         },
       },
       include: {

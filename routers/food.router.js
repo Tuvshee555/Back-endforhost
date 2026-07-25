@@ -6,13 +6,14 @@ import { updateFood } from "../controller/foods/update-food.js";
 import { deleteAllFoods } from "../controller/foods/delete-all-food.js";
 import { getFoodById } from "../controller/foods/get-food-by-id.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
+import { publicCache } from "../middleware/publicCache.js";
 
 export const foodRouter = Router();
 
 foodRouter.post("/", requireAdmin, createFood);
-foodRouter.get("/", getFood);
+foodRouter.get("/", publicCache(), getFood);
 foodRouter.put("/:id", requireAdmin, updateFood);
-foodRouter.get("/:id", getFoodById); 
+foodRouter.get("/:id", publicCache(), getFoodById);
 
 
 foodRouter.delete("/", requireAdmin, deleteAllFoods);

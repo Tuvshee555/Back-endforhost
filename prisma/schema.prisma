@@ -42,6 +42,10 @@ model Payment {
   qrText    String?
   status    PaymentStatus @default(PENDING)
   qrImage   String?
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 model Food {
@@ -97,12 +101,15 @@ model Category {
 }
 
 model FoodOrder {
-  id            String        @id @default(uuid())
-  orderNumber   String        @unique
-  userId        String
-  totalPrice    Float
-  status        OrderStatus
-  paymentMethod PaymentMethod
+  id             String        @id @default(uuid())
+  orderNumber    String        @unique
+  idempotencyKey String?       @unique
+  userId         String
+  totalPrice     Float
+  deliveryFee    Float         @default(0)
+  deliveryZone   String?
+  status         OrderStatus
+  paymentMethod  PaymentMethod
 
   firstName String?
   lastName  String?
@@ -129,6 +136,7 @@ model OrderItem {
   id       String    @id @default(uuid())
   foodId   String
   quantity Int
+  size     String?
   orderId  String
   userId   String?
   food     Food      @relation(fields: [foodId], references: [id])
@@ -173,6 +181,18 @@ model Review {
 
   @@unique([foodId, userId]) // 1 review per user per food
   @@index([foodId])
+}
+
+model EmailOtp {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
 }
 
 enum Role {

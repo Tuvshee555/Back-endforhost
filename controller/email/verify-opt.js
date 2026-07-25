@@ -1,52 +1,37 @@
-import { otpStore } from "../../utils/otp-store.js";
+import { checkOtp } from "../../utils/otp-store.js";
 import { prisma } from "../../prismaClient.js";
 import jwt from "jsonwebtoken";
 
-export const verifyOtp = async (req, res) => {
-  let { email, code } = req.body;
+const OTP_ERROR_MESSAGES = {
+  not_found: "Код илгээгүй",
+  expired: "Код хугацаа дууссан",
+  locked: "Хэт олон буруу оролдлого. Шинэ код авна уу.",
+  mismatch: "Код буруу",
+};
 
-  console.log("=== VERIFY OTP DEBUG START ===");
-  console.log("Raw request body:", req.body);
+export const verifyOtp = async (req, res) => {
+  const { email, code } = req.body;
 
   if (!email || !code) {
-    console.log("Missing fields");
     return res.status(400).json({ message: "Мэдээлэл дутуу" });
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = String(email).trim().toLowerCase();
   const normalizedCode = String(code).trim();
 
-  console.log("Normalized Email:", normalizedEmail);
-  console.log("Normalized Code:", normalizedCode);
+  const result = await checkOtp(normalizedEmail, normalizedCode);
 
-  const storedValue = otpStore.get(normalizedEmail);
-  const rawStored = otpStore.get(email); // check both forms
-
-  console.log("Stored Value (normalized):", storedValue);
-  console.log("Stored Value (raw):", rawStored);
-  console.log("Entire otpStore:", otpStore);
-
-  // Check for wrong key
-  if (!storedValue) {
-    console.log("OTP not found under normalized key");
-    return res.status(400).json({ message: "Код илгээгүй" });
+  if (!result.ok) {
+    return res.status(400).json({
+      message: OTP_ERROR_MESSAGES[result.reason] || "Код буруу",
+    });
   }
 
-  // Expiration
-  if (Date.now() > storedValue.expiresAt) {
-    console.log("OTP expired. expiresAt =", storedValue.expiresAt);
-    otpStore.delete(normalizedEmail);
-    return res.status(400).json({ message: "Код хугацаа дууссан" });
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ message: "Auth not configured" });
   }
 
-
-  if (String(storedValue.otp) !== normalizedCode) {
-    return res.status(400).json({ message: "Код буруу" });
-  }
-
-  otpStore.delete(normalizedEmail);
-
-  // now continue your normal login logic
+  // OTP verified — continue normal login logic
   let user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
   if (!user) {
@@ -59,7 +44,7 @@ export const verifyOtp = async (req, res) => {
   }
 
   const jwtToken = jwt.sign(
-    { userId: user.id, role: user.role },
+    { userId: user.id, role: user.role, type: "access" },
     process.env.JWT_SECRET,
     { expiresIn: "21d" }
   );
@@ -74,5 +59,3 @@ export const verifyOtp = async (req, res) => {
     },
   });
 };
-
-

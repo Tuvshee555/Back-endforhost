@@ -68,6 +68,7 @@ export const facebookAuth = async (req, res) => {
         userId: user.id,
         email: user.email,
         role: user.role,
+        type: "access",
       },
       process.env.JWT_SECRET,
       { expiresIn: "21d" }

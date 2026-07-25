@@ -1,30 +1,52 @@
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { sendEmail } from "../../utils/send-email.js";
 import { prisma } from "../../prismaClient.js";
+
+const RESET_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     const normalizedEmail = String(email || "").trim().toLowerCase();
-    console.log("Forgot password request for:", normalizedEmail);
 
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: { id: true, email: true },
     });
+
+    // Always respond the same way — never reveal whether the account exists.
+    const genericResponse = {
+      message: "If that account exists, a reset email has been sent",
+    };
+
     if (!user) {
-      return res.json({ message: "If that account exists, a reset email has been sent" });
+      return res.json(genericResponse);
     }
 
-    console.log("User found:", user.email);
-
-    // Use user.id (Prisma primary key), not user.id
     if (!process.env.JWT_SECRET) {
       return res.status(500).json({ message: "Auth not configured" });
     }
 
-    const resetToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-      expiresIn: "15m",
+    const resetToken = jwt.sign(
+      { id: user.id, type: "reset" },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    // Store only a hash of the token so it can be verified once and then
+    // invalidated (single-use), even though the token itself is a JWT.
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken: tokenHash,
+        resetTokenExpiry: new Date(Date.now() + RESET_TTL_MS),
+      },
     });
 
     const resetBaseUrl =
@@ -37,7 +59,6 @@ export const forgotPassword = async (req, res) => {
     }
 
     const resetLink = `${resetBaseUrl}/reset-password?token=${resetToken}`;
-    console.log("Reset link:", resetLink);
 
     await sendEmail({
       to: user.email,
@@ -45,9 +66,9 @@ export const forgotPassword = async (req, res) => {
       text: `Click here: ${resetLink}`,
     });
 
-    res.json({ message: "If that account exists, a reset email has been sent" });
+    return res.json(genericResponse);
   } catch (err) {
-    console.error("Forgot password error:", err);
-    res.status(500).json({ message: err.message });
+    console.error("Forgot password error:", err?.message || err);
+    return res.status(500).json({ message: "Server error" });
   }
 };

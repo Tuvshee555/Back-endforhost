@@ -8,6 +8,7 @@ import crypto from "crypto";
 
 import { sendEmail } from "../../utils/sendEmail.js";
 import { paymentConfirmedEmail } from "../../utils/emailTemplates.js";
+import { incrementSalesForOrder } from "../../utils/orderPaid.js";
 
 const QPAY_BASE_URL = process.env.QPAY_BASE_URL;
 const AMOUNT_EPSILON = 0.01;
@@ -241,6 +242,13 @@ export const checkPayment = async (req, res) => {
       data: { status: "PAID" },
     });
 
+    // First transition to PAID (guarded above) — count the sale.
+    try {
+      await incrementSalesForOrder(record.orderId);
+    } catch (salesErr) {
+      console.error("âŒ Failed to increment salesCount (checkPayment):", salesErr);
+    }
+
     console.log("âœ… Order updated (checkPayment):", updatedOrder.id);
 
     try {
@@ -377,6 +385,13 @@ export const webhook = async (req, res) => {
       where: { id: payment.orderId },
       data: { status: "PAID" },
     });
+
+    // First transition to PAID (guarded above) — count the sale.
+    try {
+      await incrementSalesForOrder(payment.orderId);
+    } catch (salesErr) {
+      console.error("âŒ Failed to increment salesCount (webhook):", salesErr);
+    }
 
     console.log(`âœ… Order ${updatedOrder.id} marked PAID via QPay webhook`);
 

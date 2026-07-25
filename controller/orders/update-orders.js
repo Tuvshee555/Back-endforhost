@@ -5,6 +5,7 @@ import {
 } from "../../utils/telegram.js";
 import { sendEmail } from "../../utils/sendEmail.js";
 import { orderStatusChangedEmail } from "../../utils/emailTemplates.js";
+import { restockOrder } from "../../utils/stock.js";
 
 const ALLOWED_TRANSITIONS = {
   PENDING: ["WAITING_PAYMENT", "COD_PENDING", "CANCELLED"],
@@ -151,6 +152,11 @@ export const updatedFoodOrder = async (req, res) => {
       }
     }
 
+    // Cancelling an order releases the stock it had reserved.
+    if (status && oldStatus !== "CANCELLED" && newStatus === "CANCELLED") {
+      await restockOrder(id);
+    }
+
     const IMPORTANT = new Set([
       "PAID",
       "CANCELLED",
@@ -223,6 +229,7 @@ export const updatedFoodOrder = async (req, res) => {
       items: updated.foodOrderItems.map((it) => ({
         id: it.id,
         quantity: it.quantity,
+        size: it.size,
         food: {
           id: it.food.id,
           foodName: it.food.foodName,
